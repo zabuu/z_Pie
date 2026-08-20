@@ -37,13 +37,46 @@ function AutoPie:SanitizeDB()
 end
 
 function AutoPie:CacheSpells()
-    self.spellCache = {}
+    local tempCache = {}
     local i = 1
+    local count = 0
     while true do
         local spellName = GetSpellName(i, "BOOKTYPE_SPELL")
         if not spellName then break end
-        self.spellCache[spellName] = i
+        tempCache[spellName] = i
         i = i + 1
+        count = count + 1
+    end
+    
+    if count > 0 then
+        self.spellCache = tempCache
+    end
+end
+
+function AutoPie:RefreshDBIcons()
+    if not AutoPieDB then return end
+    for r = 1, 10 do
+        if AutoPieDB[r] and AutoPieDB[r].items then
+            for s = 1, 8 do
+                local item = AutoPieDB[r].items[s]
+                if item and item.name then
+                    if item.type == "SPELL_OR_ITEM" and self.spellCache[item.name] then
+                        local tex = GetSpellTexture(self.spellCache[item.name], "BOOKTYPE_SPELL")
+                        if tex and tex ~= "" then
+                            item.icon = tex
+                        end
+                    elseif item.type == "MACRO" then
+                        local idx = GetMacroIndexByName(item.name)
+                        if idx > 0 then
+                            local _, tex = GetMacroInfo(idx)
+                            if tex and tex ~= "" then
+                                item.icon = tex
+                            end
+                        end
+                    end
+                end
+            end
+        end
     end
 end
 
@@ -55,7 +88,7 @@ function AutoPie:GetBufferSlot()
 end
 
 local function IsSkillActive(iconTexture)
-    if not iconTexture then return false end
+    if not iconTexture or iconTexture == "" then return false end
     
     local numForms = GetNumShapeshiftForms()
     if numForms and numForms > 0 then
@@ -93,7 +126,6 @@ local function SetRotatedTexCoords(tex, angle)
 end
 
 function AutoPie:InitButtons()
-    -- Initialize 360-degree compass frame for "SMOOTH" mode
     self.compassFrame = CreateFrame("Frame", "AutoPieCompassFrame", UIParent)
     self.compassFrame:SetFrameStrata("FULLSCREEN_DIALOG")
     self.compassFrame.arrows = {}
@@ -149,7 +181,6 @@ function AutoPie:InitButtons()
             hl:Hide()
             btn.hl = hl
             
-            -- Initialize single slice arrow for "SNAP" mode
             local arrow = btn:CreateTexture(name.."Arrow", "OVERLAY")
             arrow:SetTexture("Interface\\Minimap\\MinimapArrow")
             arrow:SetWidth(32)
@@ -182,6 +213,29 @@ function AutoPie:HideAll()
     end
     self.activeDegree = nil
     self:Hide()
+end
+
+function AutoPie:GetIcon(itemData)
+    if not itemData or not itemData.name then return "Interface\\Icons\\INV_Misc_QuestionMark" end
+    
+    if self.spellCache and self.spellCache[itemData.name] then
+        local tex = GetSpellTexture(self.spellCache[itemData.name], "BOOKTYPE_SPELL")
+        if tex and tex ~= "" then return tex end
+    end
+    
+    if itemData.type == "MACRO" then
+        local idx = GetMacroIndexByName(itemData.name)
+        if idx > 0 then
+            local _, tex = GetMacroInfo(idx)
+            if tex and tex ~= "" then return tex end
+        end
+    end
+    
+    if itemData.icon and itemData.icon ~= "" then
+        return itemData.icon
+    end
+    
+    return "Interface\\Icons\\INV_Misc_QuestionMark"
 end
 
 function AutoPie:GetActionData(itemData)
@@ -327,7 +381,6 @@ function AutoPie:OpenRing(ringIndex)
         btn:ClearAllPoints()
         btn:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", bx, by)
         
-        -- Setup Snap Arrows
         if arrowTex ~= "NONE" and arrowBehavior == "SNAP" then
             local compassRadius = radius - 35
             local ax = self.centerX + (compassRadius * math.cos(angle)) - 16
@@ -342,9 +395,10 @@ function AutoPie:OpenRing(ringIndex)
             btn.arrow:Hide()
         end
         
-        btn.icon:SetTexture(itemData.icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+        local displayIcon = self:GetIcon(itemData)
+        btn.icon:SetTexture(displayIcon)
         
-        if IsSkillActive(itemData.icon) then
+        if IsSkillActive(displayIcon) then
             btn.activeTex:Show()
             btn.border:SetVertexColor(1, 0.85, 0)
         else
@@ -428,7 +482,6 @@ AutoPie:SetScript("OnUpdate", function()
         return
     end
 
-    -- Process Smooth Behavior
     if arrowTex ~= "NONE" and arrowBehavior == "SMOOTH" then
         local rawAngle = math.atan2(dy, dx)
         local curDeg = math.floor(math.deg(rawAngle) + 0.5)
@@ -446,7 +499,6 @@ AutoPie:SetScript("OnUpdate", function()
         end
     end
 
-    -- Process Button Slice Hover & Snap Behavior
     local rawAngle = math.atan2(dy, dx)
     local angle = (math.pi / 2) - rawAngle
     if angle < 0 then angle = angle + (2 * math.pi) end
@@ -491,7 +543,17 @@ AutoPie:SetScript("OnEvent", function()
                 AutoPieConfigFrame:Show()
             end
         end
-        DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[AutoPie]|r Loaded! Type |cffffcc00/pie|r or |cffffcc00/pi|r to configure. |cff888888(Made by Zab - Aug 20, 2026)|r")
+        
+        local greetTimer = CreateFrame("Frame")
+        greetTimer.elapsed = 0
+        greetTimer:SetScript("OnUpdate", function()
+            this.elapsed = this.elapsed + arg1
+            if this.elapsed >= 4 then
+                DEFAULT_CHAT_FRAME:AddMessage("|cffff0000A|cffff7f00u|cffffff00t|cff00ff00o|cff00bfffP|cff7b68eei|cff9400d3e|r ~ Type /autopie, /pie, or /pi to configure.")
+                this:Hide()
+                this:SetScript("OnUpdate", nil)
+            end
+        end)
     elseif event == "SPELLS_CHANGED" then
         AutoPie:CacheSpells()
     end

@@ -7,7 +7,7 @@ local flatBackdrop = {
 
 local f = CreateFrame("Frame", "AutoPieConfigFrame", UIParent)
 f:SetWidth(440)
-f:SetHeight(500)
+f:SetHeight(540)
 f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
 f:SetBackdrop(flatBackdrop)
 f:SetBackdropColor(0.07, 0.07, 0.07, 0.95)
@@ -26,7 +26,7 @@ title:SetText("AutoPie")
 
 local footer = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 footer:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 10)
-footer:SetText("Made by Zab - Aug 20, 2026")
+footer:SetText("AutoPie v1.0.1 - Made by Zab - Aug 20, 2026")
 
 local function CreateFlatButton(name, parent, width, height, text)
     local btn = CreateFrame("Button", name, parent)
@@ -55,6 +55,147 @@ closeBtn:SetScript("OnClick", function() f:Hide() end)
 
 local selectedRing = 1
 local listeningForBind = false
+
+-- ==========================================
+-- GLOBAL SETTINGS SECTION
+-- ==========================================
+local lblGlobal = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+lblGlobal:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -40)
+lblGlobal:SetText("GLOBAL SETTINGS")
+
+local lblArrow = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+lblArrow:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -60)
+lblArrow:SetText("Arrow Style:")
+lblArrow:SetTextColor(0.8, 0.8, 0.8)
+
+local ddArrow = CreateFrame("Frame", "AutoPieArrowDropdown", f, "UIDropDownMenuTemplate")
+ddArrow:SetPoint("TOPLEFT", f, "TOPLEFT", 80, -54)
+
+local ddL = getglobal(ddArrow:GetName().."Left")
+local ddM = getglobal(ddArrow:GetName().."Middle")
+local ddR = getglobal(ddArrow:GetName().."Right")
+if ddL then ddL:Hide() end
+if ddM then ddM:Hide() end
+if ddR then ddR:Hide() end
+
+local ddBg = CreateFrame("Frame", nil, ddArrow)
+ddBg:SetPoint("TOPLEFT", ddArrow, "TOPLEFT", 16, -2)
+ddBg:SetPoint("BOTTOMRIGHT", ddArrow, "BOTTOMRIGHT", -16, 6)
+ddBg:SetBackdrop(flatBackdrop)
+ddBg:SetBackdropColor(0.15, 0.15, 0.15, 1)
+ddBg:SetBackdropBorderColor(0, 0, 0, 1)
+ddBg:SetFrameLevel(ddArrow:GetFrameLevel() - 1)
+
+local arrowOptions = {
+    { text = "Silver", value = "Interface\\Minimap\\MinimapArrow" },
+    { text = "Gold", value = "Interface\\Minimap\\ROTATING-MINIMAPGUIDEARROW" },
+    { text = "Wide", value = "Interface\\MoneyFrame\\Arrow-Right-Up" },
+    { text = "Big", value = "Interface\\ChatFrame\\ChatFrameExpandArrow" },
+    { text = "Hidden", value = "NONE" }
+}
+
+local function OnArrowSelect()
+    UIDropDownMenu_SetSelectedID(ddArrow, this:GetID())
+    if not AutoPieDB then AutoPieDB = {} end
+    AutoPieDB.arrowStyle = this.value
+    UIDropDownMenu_SetText(this:GetText(), ddArrow)
+end
+
+UIDropDownMenu_Initialize(ddArrow, function()
+    local currentStyle = (AutoPieDB and AutoPieDB.arrowStyle) or "Interface\\Minimap\\MinimapArrow"
+    for _, opt in ipairs(arrowOptions) do
+        local info = {}
+        info.text = opt.text
+        info.value = opt.value
+        info.func = OnArrowSelect
+        info.checked = (currentStyle == opt.value)
+        UIDropDownMenu_AddButton(info)
+    end
+end)
+UIDropDownMenu_SetWidth(80, ddArrow)
+
+local lblBehavior = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+lblBehavior:SetPoint("TOPLEFT", f, "TOPLEFT", 220, -60)
+lblBehavior:SetText("Anim:")
+lblBehavior:SetTextColor(0.8, 0.8, 0.8)
+
+local ddBehavior = CreateFrame("Frame", "AutoPieBehaviorDropdown", f, "UIDropDownMenuTemplate")
+ddBehavior:SetPoint("TOPLEFT", f, "TOPLEFT", 255, -54)
+
+local bL = getglobal(ddBehavior:GetName().."Left")
+local bM = getglobal(ddBehavior:GetName().."Middle")
+local bR = getglobal(ddBehavior:GetName().."Right")
+if bL then bL:Hide() end
+if bM then bM:Hide() end
+if bR then bR:Hide() end
+
+local bBg = CreateFrame("Frame", nil, ddBehavior)
+bBg:SetPoint("TOPLEFT", ddBehavior, "TOPLEFT", 16, -2)
+bBg:SetPoint("BOTTOMRIGHT", ddBehavior, "BOTTOMRIGHT", -16, 6)
+bBg:SetBackdrop(flatBackdrop)
+bBg:SetBackdropColor(0.15, 0.15, 0.15, 1)
+bBg:SetBackdropBorderColor(0, 0, 0, 1)
+bBg:SetFrameLevel(ddBehavior:GetFrameLevel() - 1)
+
+local behaviorOptions = {
+    { text = "Snap", value = "SNAP" },
+    { text = "Smooth", value = "SMOOTH" }
+}
+
+local function OnBehaviorSelect()
+    UIDropDownMenu_SetSelectedID(ddBehavior, this:GetID())
+    if not AutoPieDB then AutoPieDB = {} end
+    AutoPieDB.arrowBehavior = this.value
+    UIDropDownMenu_SetText(this:GetText(), ddBehavior)
+end
+
+UIDropDownMenu_Initialize(ddBehavior, function()
+    local currentBehavior = (AutoPieDB and AutoPieDB.arrowBehavior) or "SMOOTH"
+    for _, opt in ipairs(behaviorOptions) do
+        local info = {}
+        info.text = opt.text
+        info.value = opt.value
+        info.func = OnBehaviorSelect
+        info.checked = (currentBehavior == opt.value)
+        UIDropDownMenu_AddButton(info)
+    end
+end)
+UIDropDownMenu_SetWidth(75, ddBehavior)
+
+-- ==========================================
+-- DIVIDER
+-- ==========================================
+local divLine = f:CreateTexture(nil, "ARTWORK")
+divLine:SetTexture(1, 1, 1, 0.1)
+divLine:SetWidth(400)
+divLine:SetHeight(1)
+divLine:SetPoint("TOP", f, "TOP", 0, -85)
+
+-- ==========================================
+-- RING SPECIFIC SETTINGS SECTION
+-- ==========================================
+local lblLocal = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+lblLocal:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -95)
+lblLocal:SetText("RING SETTINGS")
+
+local ringTabs = {}
+for i = 1, 10 do
+    local btn = CreateFlatButton("AutoPieRingTab"..i, f, 70, 22, "Ring "..i)
+    if i <= 5 then
+        btn:SetPoint("TOPLEFT", f, "TOPLEFT", 18 + ((i-1) * 78), -115)
+    else
+        btn:SetPoint("TOPLEFT", f, "TOPLEFT", 18 + ((i-6) * 78), -141)
+    end
+    
+    btn.tabIndex = i
+    btn:SetScript("OnClick", function()
+        selectedRing = this.tabIndex
+        listeningForBind = false
+        AutoPieKeyInterceptor:Hide()
+        AutoPieConfigFrame:Refresh()
+    end)
+    ringTabs[i] = btn
+end
 
 local function CreateEditBox(name, parent, width, labelText)
     local label = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -85,30 +226,9 @@ local function CreateEditBox(name, parent, width, labelText)
     return eb, label
 end
 
--- Tabs
-local ringTabs = {}
-for i = 1, 10 do
-    local btn = CreateFlatButton("AutoPieRingTab"..i, f, 70, 22, "Ring "..i)
-    if i <= 5 then
-        btn:SetPoint("TOPLEFT", f, "TOPLEFT", 18 + ((i-1) * 78), -42)
-    else
-        btn:SetPoint("TOPLEFT", f, "TOPLEFT", 18 + ((i-6) * 78), -68)
-    end
-    
-    btn.tabIndex = i
-    btn:SetScript("OnClick", function()
-        selectedRing = this.tabIndex
-        listeningForBind = false
-        AutoPieKeyInterceptor:Hide()
-        AutoPieConfigFrame:Refresh()
-    end)
-    ringTabs[i] = btn
-end
-
--- Row 1: Setup Name, Anchor, Bind
 local ebName, lblName = CreateEditBox("AutoPieRingNameEB", f, 120, "Ring Name:")
-lblName:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -104)
-ebName:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -118)
+lblName:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -175)
+ebName:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -189)
 ebName:SetScript("OnTextChanged", function()
     if AutoPieDB and AutoPieDB[selectedRing] and this.isFocused then
         AutoPieDB[selectedRing].name = this:GetText()
@@ -116,7 +236,7 @@ ebName:SetScript("OnTextChanged", function()
 end)
 
 local anchorBtn = CreateFlatButton("AutoPieAnchorBtn", f, 110, 22, "")
-anchorBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 150, -118)
+anchorBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 150, -189)
 anchorBtn:SetScript("OnClick", function()
     if not AutoPieDB[selectedRing] then return end
     if AutoPieDB[selectedRing].anchor == "MOUSE" then
@@ -128,7 +248,7 @@ anchorBtn:SetScript("OnClick", function()
 end)
 
 local bindBtn = CreateFlatButton("AutoPieKeybindBtn", f, 130, 22, "")
-bindBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 270, -118)
+bindBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 270, -189)
 
 local keyInterceptor = CreateFrame("Frame", "AutoPieKeyInterceptor", UIParent)
 keyInterceptor:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -189,111 +309,9 @@ bindBtn:SetScript("OnClick", function()
     AutoPieConfigFrame:Refresh()
 end)
 
--- Row 2: Arrow Style, Animation Behavior, Radius
-local lblArrow = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-lblArrow:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -154)
-lblArrow:SetText("Arrow Style:")
-lblArrow:SetTextColor(0.8, 0.8, 0.8)
-
-local ddArrow = CreateFrame("Frame", "AutoPieArrowDropdown", f, "UIDropDownMenuTemplate")
-ddArrow:SetPoint("TOPLEFT", f, "TOPLEFT", 68, -148)
-
-local ddL = getglobal(ddArrow:GetName().."Left")
-local ddM = getglobal(ddArrow:GetName().."Middle")
-local ddR = getglobal(ddArrow:GetName().."Right")
-if ddL then ddL:Hide() end
-if ddM then ddM:Hide() end
-if ddR then ddR:Hide() end
-
-local ddBg = CreateFrame("Frame", nil, ddArrow)
-ddBg:SetPoint("TOPLEFT", ddArrow, "TOPLEFT", 16, -2)
-ddBg:SetPoint("BOTTOMRIGHT", ddArrow, "BOTTOMRIGHT", -16, 6)
-ddBg:SetBackdrop(flatBackdrop)
-ddBg:SetBackdropColor(0.15, 0.15, 0.15, 1)
-ddBg:SetBackdropBorderColor(0, 0, 0, 1)
-ddBg:SetFrameLevel(ddArrow:GetFrameLevel() - 1)
-
-local arrowOptions = {
-    { text = "Silver", value = "Interface\\Minimap\\MinimapArrow" },
-    { text = "Gold", value = "Interface\\Minimap\\ROTATING-MINIMAPGUIDEARROW" },
-    { text = "Wide", value = "Interface\\MoneyFrame\\Arrow-Right-Up" },
-    { text = "Big", value = "Interface\\ChatFrame\\ChatFrameExpandArrow" },
-    { text = "Hidden", value = "NONE" }
-}
-
-local function OnArrowSelect()
-    UIDropDownMenu_SetSelectedID(ddArrow, this:GetID())
-    if not AutoPieDB then AutoPieDB = {} end
-    AutoPieDB.arrowStyle = this.value
-    UIDropDownMenu_SetText(this:GetText(), ddArrow)
-end
-
-UIDropDownMenu_Initialize(ddArrow, function()
-    local currentStyle = (AutoPieDB and AutoPieDB.arrowStyle) or "Interface\\Minimap\\MinimapArrow"
-    for _, opt in ipairs(arrowOptions) do
-        local info = {}
-        info.text = opt.text
-        info.value = opt.value
-        info.func = OnArrowSelect
-        info.checked = (currentStyle == opt.value)
-        UIDropDownMenu_AddButton(info)
-    end
-end)
-UIDropDownMenu_SetWidth(80, ddArrow)
-
--- Animation Dropdown
-local lblBehavior = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-lblBehavior:SetPoint("TOPLEFT", f, "TOPLEFT", 175, -154)
-lblBehavior:SetText("Anim:")
-lblBehavior:SetTextColor(0.8, 0.8, 0.8)
-
-local ddBehavior = CreateFrame("Frame", "AutoPieBehaviorDropdown", f, "UIDropDownMenuTemplate")
-ddBehavior:SetPoint("TOPLEFT", f, "TOPLEFT", 205, -148)
-
-local bL = getglobal(ddBehavior:GetName().."Left")
-local bM = getglobal(ddBehavior:GetName().."Middle")
-local bR = getglobal(ddBehavior:GetName().."Right")
-if bL then bL:Hide() end
-if bM then bM:Hide() end
-if bR then bR:Hide() end
-
-local bBg = CreateFrame("Frame", nil, ddBehavior)
-bBg:SetPoint("TOPLEFT", ddBehavior, "TOPLEFT", 16, -2)
-bBg:SetPoint("BOTTOMRIGHT", ddBehavior, "BOTTOMRIGHT", -16, 6)
-bBg:SetBackdrop(flatBackdrop)
-bBg:SetBackdropColor(0.15, 0.15, 0.15, 1)
-bBg:SetBackdropBorderColor(0, 0, 0, 1)
-bBg:SetFrameLevel(ddBehavior:GetFrameLevel() - 1)
-
-local behaviorOptions = {
-    { text = "Snap", value = "SNAP" },
-    { text = "Smooth", value = "SMOOTH" }
-}
-
-local function OnBehaviorSelect()
-    UIDropDownMenu_SetSelectedID(ddBehavior, this:GetID())
-    if not AutoPieDB then AutoPieDB = {} end
-    AutoPieDB.arrowBehavior = this.value
-    UIDropDownMenu_SetText(this:GetText(), ddBehavior)
-end
-
-UIDropDownMenu_Initialize(ddBehavior, function()
-    local currentBehavior = (AutoPieDB and AutoPieDB.arrowBehavior) or "SMOOTH"
-    for _, opt in ipairs(behaviorOptions) do
-        local info = {}
-        info.text = opt.text
-        info.value = opt.value
-        info.func = OnBehaviorSelect
-        info.checked = (currentBehavior == opt.value)
-        UIDropDownMenu_AddButton(info)
-    end
-end)
-UIDropDownMenu_SetWidth(75, ddBehavior)
-
--- Radius Slider
 local radiusSlider = CreateFrame("Slider", "AutoPieRadiusSlider", f, "OptionsSliderTemplate")
-radiusSlider:SetWidth(100)
-radiusSlider:SetPoint("TOPLEFT", f, "TOPLEFT", 310, -156)
+radiusSlider:SetWidth(150)
+radiusSlider:SetPoint("TOP", f, "TOP", 0, -230)
 radiusSlider:SetMinMaxValues(40, 150)
 radiusSlider:SetValueStep(1)
 getglobal(radiusSlider:GetName() .. "Low"):SetText("40")
@@ -308,7 +326,9 @@ radiusSlider:SetScript("OnValueChanged", function()
     end
 end)
 
--- Capture Cursor
+-- ==========================================
+-- PREVIEW UI
+-- ==========================================
 local function CaptureCursorToSlot(targetSlot)
     local bufferSlot = AutoPie:GetBufferSlot()
     PlaceAction(bufferSlot)
@@ -328,7 +348,16 @@ local function CaptureCursorToSlot(targetSlot)
             AutoPieScanner:SetAction(bufferSlot)
             actionName = AutoPieScannerTextLeft1:GetText()
             actionIcon = GetActionTexture(bufferSlot)
+            
+            if (not actionIcon or actionIcon == "") and actionName and AutoPie.spellCache[actionName] then
+                actionIcon = GetSpellTexture(AutoPie.spellCache[actionName], "BOOKTYPE_SPELL")
+            end
+            
             actionType = "SPELL_OR_ITEM"
+        end
+        
+        if not actionIcon or actionIcon == "" then
+            actionIcon = "Interface\\Icons\\INV_Misc_QuestionMark"
         end
         
         if not AutoPieDB[selectedRing].items then AutoPieDB[selectedRing].items = {} end
@@ -345,16 +374,15 @@ local function CaptureCursorToSlot(targetSlot)
     return false
 end
 
--- Center Drop UI
 local instruction = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-instruction:SetPoint("TOP", f, "TOP", 0, -185)
+instruction:SetPoint("TOP", f, "TOP", 0, -270)
 instruction:SetText("Drag Spells, Macros, or Items into the center slot below:")
 instruction:SetTextColor(0.8, 0.8, 0.8)
 
 local centerBtn = CreateFrame("Button", "AutoPieConfigCenterBtn", f)
 centerBtn:SetWidth(42)
 centerBtn:SetHeight(42)
-centerBtn:SetPoint("TOP", f, "TOP", 0, -310)
+centerBtn:SetPoint("TOP", f, "TOP", 0, -380)
 centerBtn:SetBackdrop(flatBackdrop)
 centerBtn:SetBackdropColor(0.1, 0.1, 0.1, 1)
 centerBtn:SetBackdropBorderColor(0, 0, 0, 1)
@@ -392,7 +420,6 @@ centerBtn:RegisterForDrag("LeftButton")
 centerBtn:SetScript("OnClick", HandleCenterDrop)
 centerBtn:SetScript("OnReceiveDrag", HandleCenterDrop)
 
--- Custom Drag
 local draggingSlot = nil
 local dragFrame = CreateFrame("Frame", nil, f)
 dragFrame:SetFrameStrata("TOOLTIP")
@@ -415,7 +442,6 @@ dragFrame:SetScript("OnUpdate", function()
     this:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
 end)
 
--- Preview Icons
 local previewBtns = {}
 for s = 1, 8 do
     local pBtn = CreateFrame("Button", "AutoPiePreview"..s, f)
@@ -438,7 +464,8 @@ for s = 1, 8 do
         local item = AutoPieDB[selectedRing].items[this.slotIndex]
         if item then
             draggingSlot = this.slotIndex
-            dragTex:SetTexture(item.icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+            local displayIcon = AutoPie:GetIcon(item)
+            dragTex:SetTexture(displayIcon)
             dragFrame:Show()
             this:SetAlpha(0.2)
         end
@@ -473,18 +500,80 @@ for s = 1, 8 do
     
     pBtn:SetScript("OnEnter", function()
         this:SetBackdropBorderColor(1, 0.8, 0, 1)
-        local itemData = AutoPieDB[selectedRing].items[this.slotIndex]
-        if itemData and itemData.name then
-            GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-            GameTooltip:SetText(itemData.name, 1, 1, 1)
-            GameTooltip:AddLine("Click to remove", 1, 0.2, 0.2)
-            GameTooltip:AddLine("Drag to rearrange", 0.2, 1, 0.2)
-            GameTooltip:Show()
-        end
+        this.isHovered = true
+        this.tooltipState = nil
     end)
+    
     pBtn:SetScript("OnLeave", function() 
         this:SetBackdropBorderColor(0, 0, 0, 1)
+        this.isHovered = false
+        this.tooltipState = nil
         GameTooltip:Hide() 
+    end)
+    
+    pBtn:SetScript("OnUpdate", function()
+        if not this.isHovered then return end
+        
+        local itemData = AutoPieDB[selectedRing].items[this.slotIndex]
+        if not itemData or not itemData.name then return end
+        
+        local desiredState = IsAltKeyDown() and "ALT" or "NORMAL"
+        
+        if this.tooltipState ~= desiredState then
+            this.tooltipState = desiredState
+            
+            if desiredState == "ALT" then
+                GameTooltip:SetOwner(this, "ANCHOR_CURSOR")
+                
+                local spellId = AutoPie.spellCache and AutoPie.spellCache[itemData.name]
+                if spellId then
+                    GameTooltip:SetSpell(spellId, "BOOKTYPE_SPELL")
+                else
+                    local foundLink
+                    for bag = 0, 4 do
+                        for slot = 1, GetContainerNumSlots(bag) do
+                            local link = GetContainerItemLink(bag, slot)
+                            if link and string.find(link, itemData.name) then
+                                foundLink = link
+                                break
+                            end
+                        end
+                        if foundLink then break end
+                    end
+                    if not foundLink then
+                        for invSlot = 0, 19 do
+                            local link = GetInventoryItemLink("player", invSlot)
+                            if link and string.find(link, itemData.name) then
+                                foundLink = link
+                                break
+                            end
+                        end
+                    end
+                    
+                    local linkString
+                    if foundLink then
+                        _, _, linkString = string.find(foundLink, "(item:%d+:%d+:%d+:%d+)")
+                    end
+                    
+                    if linkString then
+                        GameTooltip:SetHyperlink(linkString)
+                    else
+                        GameTooltip:SetText(itemData.name, 1, 1, 1)
+                        if itemData.type == "MACRO" then
+                            GameTooltip:AddLine("Macro", 0.5, 0.5, 0.5)
+                        end
+                    end
+                end
+                GameTooltip:Show()
+            else
+                GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+                GameTooltip:SetText(itemData.name, 1, 1, 1)
+                GameTooltip:AddLine("Click to remove", 1, 0.2, 0.2)
+                GameTooltip:AddLine("Drag to rearrange", 0.2, 1, 0.2)
+                GameTooltip:AddLine("Hold ALT for details", 0.5, 0.5, 0.5)
+                GameTooltip:Show()
+            end
+        end
     end)
     
     pBtn:Hide()
@@ -493,6 +582,9 @@ end
 
 function AutoPieConfigFrame:Refresh()
     if not AutoPieDB then return end
+    
+    if AutoPie and AutoPie.CacheSpells then AutoPie:CacheSpells() end
+    if AutoPie and AutoPie.RefreshDBIcons then AutoPie:RefreshDBIcons() end
     
     local data = AutoPieDB[selectedRing]
     if not ebName.isFocused then ebName:SetText(data.name or ("Ring "..selectedRing)) end
@@ -545,7 +637,11 @@ function AutoPieConfigFrame:Refresh()
         end
     end
     
-    for i = 1, 8 do previewBtns[i]:Hide() end
+    for i = 1, 8 do 
+        previewBtns[i]:Hide() 
+        previewBtns[i].icon:SetTexture(nil)
+        previewBtns[i]:SetFrameLevel(f:GetFrameLevel() + 5)
+    end
     
     local items = data.items or {}
     local activeSlots = {}
@@ -567,7 +663,9 @@ function AutoPieConfigFrame:Refresh()
             
             btn:ClearAllPoints()
             btn:SetPoint("CENTER", centerBtn, "CENTER", bx, by)
-            btn.icon:SetTexture(items[origSlot].icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+            
+            local displayIcon = AutoPie:GetIcon(items[origSlot])
+            btn.icon:SetTexture(displayIcon)
             btn:SetAlpha(1.0)
             btn:Show()
         end
