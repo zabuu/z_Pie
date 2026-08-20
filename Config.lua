@@ -229,16 +229,9 @@ end
 local ebName, lblName = CreateEditBox("AutoPieRingNameEB", f, 120, "Ring Name:")
 lblName:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -175)
 ebName:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -189)
-
 ebName:SetScript("OnTextChanged", function()
     if AutoPieDB and AutoPieDB[selectedRing] and this.isFocused then
-        local txt = this:GetText()
-        AutoPieDB[selectedRing].name = txt
-        
-        -- Live-update the corresponding tab text, truncating to 10 chars so it fits nicely
-        local rName = txt == "" and ("Ring "..selectedRing) or txt
-        local shortName = string.len(rName) > 10 and string.sub(rName, 1, 9).."." or rName
-        ringTabs[selectedRing].text:SetText(shortName)
+        AutoPieDB[selectedRing].name = this:GetText()
     end
 end)
 
@@ -634,13 +627,7 @@ function AutoPieConfigFrame:Refresh()
         UIDropDownMenu_SetText("Smooth", ddBehavior)
     end
     
-    -- Apply tab labels with truncation to match user inputs
     for i = 1, 10 do
-        local rName = (AutoPieDB[i] and AutoPieDB[i].name) or ("Ring "..i)
-        if rName == "" then rName = "Ring "..i end
-        local shortName = string.len(rName) > 10 and string.sub(rName, 1, 9).."." or rName
-        ringTabs[i].text:SetText(shortName)
-
         if i == selectedRing then 
             ringTabs[i]:SetBackdropBorderColor(0.2, 0.6, 1.0, 1)
             ringTabs[i].text:SetTextColor(1, 1, 1)
