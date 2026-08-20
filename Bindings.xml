@@ -1,0 +1,32 @@
+<Bindings>
+    <Binding name="AUTOPIE_RING_1" runOnUp="true" header="AUTOPIE">
+        if keystate == "down" then AutoPie:OpenRing(1) else AutoPie:CloseRing() end
+    </Binding>
+    <Binding name="AUTOPIE_RING_2" runOnUp="true">
+        if keystate == "down" then AutoPie:OpenRing(2) else AutoPie:CloseRing() end
+    </Binding>
+    <Binding name="AUTOPIE_RING_3" runOnUp="true">
+        if keystate == "down" then AutoPie:OpenRing(3) else AutoPie:CloseRing() end
+    </Binding>
+    <Binding name="AUTOPIE_RING_4" runOnUp="true">
+        if keystate == "down" then AutoPie:OpenRing(4) else AutoPie:CloseRing() end
+    </Binding>
+    <Binding name="AUTOPIE_RING_5" runOnUp="true">
+        if keystate == "down" then AutoPie:OpenRing(5) else AutoPie:CloseRing() end
+    </Binding>
+    <Binding name="AUTOPIE_RING_6" runOnUp="true">
+        if keystate == "down" then AutoPie:OpenRing(6) else AutoPie:CloseRing() end
+    </Binding>
+    <Binding name="AUTOPIE_RING_7" runOnUp="true">
+        if keystate == "down" then AutoPie:OpenRing(7) else AutoPie:CloseRing() end
+    </Binding>
+    <Binding name="AUTOPIE_RING_8" runOnUp="true">
+        if keystate == "down" then AutoPie:OpenRing(8) else AutoPie:CloseRing() end
+    </Binding>
+    <Binding name="AUTOPIE_RING_9" runOnUp="true">
+        if keystate == "down" then AutoPie:OpenRing(9) else AutoPie:CloseRing() end
+    </Binding>
+    <Binding name="AUTOPIE_RING_10" runOnUp="true">
+        if keystate == "down" then AutoPie:OpenRing(10) else AutoPie:CloseRing() end
+    </Binding>
+</Bindings>
