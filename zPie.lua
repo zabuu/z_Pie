@@ -55,6 +55,7 @@ function zPie:SanitizeDB()
     if not zPieDB then zPieDB = {} end
     if not zPieDB.arrowStyle then zPieDB.arrowStyle = "Interface\\Minimap\\MinimapArrow" end
     if not zPieDB.arrowBehavior then zPieDB.arrowBehavior = "SMOOTH" end
+    if zPieDB.showSelectionNames == nil then zPieDB.showSelectionNames = true end
     for i = 1, 10 do
         if not zPieDB[i] then
             zPieDB[i] = { name = "Ring " .. i, anchor = "MOUSE", items = {}, radius = 75 }
@@ -154,6 +155,25 @@ local function SetRotatedTexCoords(tex, angle)
 end
 
 function zPie:InitButtons()
+    self.selectionTooltip = CreateFrame("Frame", "zPieSelectionTooltip", UIParent)
+    self.selectionTooltip:SetHeight(18)
+    self.selectionTooltip:SetFrameStrata("TOOLTIP")
+    self.selectionTooltip:SetClampedToScreen(true)
+    self.selectionTooltip:SetBackdrop({
+        bgFile = "Interface\\BUTTONS\\WHITE8X8",
+        edgeFile = "Interface\\BUTTONS\\WHITE8X8",
+        tile = false,
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 }
+    })
+    self.selectionTooltip:SetBackdropColor(0.03, 0.03, 0.03, 0.6)
+    self.selectionTooltip:SetBackdropBorderColor(0.35, 0.35, 0.35, 0.6)
+
+    local selectionText = self.selectionTooltip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    selectionText:SetPoint("CENTER", self.selectionTooltip, "CENTER", 0, 0)
+    self.selectionTooltip.text = selectionText
+    self.selectionTooltip:Hide()
+
     self.compassFrame = CreateFrame("Frame", "zPieCompassFrame", UIParent)
     self.compassFrame:SetFrameStrata("FULLSCREEN_DIALOG")
     self.compassFrame.arrows = {}
@@ -208,6 +228,41 @@ function zPie:InitButtons()
             hl:SetAllPoints(btn)
             hl:Hide()
             btn.hl = hl
+
+            local equippedOutline = {}
+
+            local equippedTop = btn:CreateTexture(nil, "OVERLAY")
+            equippedTop:SetTexture(0.2, 1, 0.2, 1)
+            equippedTop:SetHeight(1)
+            equippedTop:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
+            equippedTop:SetPoint("TOPRIGHT", btn, "TOPRIGHT", 0, 0)
+            table.insert(equippedOutline, equippedTop)
+
+            local equippedBottom = btn:CreateTexture(nil, "OVERLAY")
+            equippedBottom:SetTexture(0.2, 1, 0.2, 1)
+            equippedBottom:SetHeight(1)
+            equippedBottom:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
+            equippedBottom:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
+            table.insert(equippedOutline, equippedBottom)
+
+            local equippedLeft = btn:CreateTexture(nil, "OVERLAY")
+            equippedLeft:SetTexture(0.2, 1, 0.2, 1)
+            equippedLeft:SetWidth(1)
+            equippedLeft:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
+            equippedLeft:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
+            table.insert(equippedOutline, equippedLeft)
+
+            local equippedRight = btn:CreateTexture(nil, "OVERLAY")
+            equippedRight:SetTexture(0.2, 1, 0.2, 1)
+            equippedRight:SetWidth(1)
+            equippedRight:SetPoint("TOPRIGHT", btn, "TOPRIGHT", 0, 0)
+            equippedRight:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
+            table.insert(equippedOutline, equippedRight)
+
+            for _, outlineTexture in ipairs(equippedOutline) do
+                outlineTexture:Hide()
+            end
+            btn.equippedOutline = equippedOutline
             
             local arrow = btn:CreateTexture(name.."Arrow", "OVERLAY")
             arrow:SetTexture("Interface\\Minimap\\MinimapArrow")
@@ -228,10 +283,15 @@ function zPie:HideAll()
             self.rings[r][s].hl:Hide()
             self.rings[r][s].activeTex:Hide()
             self.rings[r][s].arrow:Hide()
+            for _, outlineTexture in ipairs(self.rings[r][s].equippedOutline) do
+                outlineTexture:Hide()
+            end
         end
     end
     self.currentRing = nil
     self.hoveredSlice = nil
+
+    if self.selectionTooltip then self.selectionTooltip:Hide() end
     
     if self.compassFrame then
         if self.activeDegree and self.compassFrame.arrows[self.activeDegree] then
@@ -241,6 +301,22 @@ function zPie:HideAll()
     end
     self.activeDegree = nil
     self:Hide()
+end
+
+function zPie:ShowSelectionTooltip(btn, itemData)
+    local tooltip = self.selectionTooltip
+    if not tooltip or not btn or not itemData or not itemData.name or
+       not zPieDB.showSelectionNames then
+        if tooltip then tooltip:Hide() end
+        return
+    end
+
+    tooltip.text:SetText(itemData.name)
+    tooltip:SetWidth(math.max(40, tooltip.text:GetStringWidth() + 12))
+    tooltip:ClearAllPoints()
+    tooltip:SetPoint("CENTER", UIParent, "BOTTOMLEFT", self.centerX, self.centerY)
+
+    tooltip:Show()
 end
 
 function zPie:GetIcon(itemData)
@@ -302,6 +378,19 @@ function zPie:ItemLinkMatches(link, itemName)
 
     local _, _, linkedName = string.find(link, "%[(.-)%]")
     return linkedName == itemName
+end
+
+function zPie:IsItemEquipped(itemData)
+    if not itemData or not itemData.name or itemData.type == "MACRO" then return false end
+
+    for invSlot = 0, 19 do
+        local link = GetInventoryItemLink("player", invSlot)
+        if self:ItemLinkMatches(link, itemData.name) then
+            return true
+        end
+    end
+
+    return false
 end
 
 function zPie:FindItem(itemName)
@@ -449,6 +538,15 @@ function zPie:OpenRing(ringIndex)
         
         local displayIcon = self:GetIcon(itemData)
         btn.icon:SetTexture(displayIcon)
+
+        local isEquipped = self:IsItemEquipped(itemData)
+        for _, outlineTexture in ipairs(btn.equippedOutline) do
+            if isEquipped then
+                outlineTexture:Show()
+            else
+                outlineTexture:Hide()
+            end
+        end
         
         if IsSkillActive(displayIcon) then
             btn.activeTex:Show()
@@ -533,6 +631,7 @@ zPie:SetScript("OnUpdate", function()
             end
             zPie.hoveredSlice = nil
         end
+        zPie.selectionTooltip:Hide()
         if zPie.activeDegree and zPie.compassFrame.arrows[zPie.activeDegree] then
             zPie.compassFrame.arrows[zPie.activeDegree]:Hide()
             zPie.activeDegree = nil
@@ -576,6 +675,9 @@ zPie:SetScript("OnUpdate", function()
         zPie.hoveredSlice = selectedIndex
         local newSlot = zPie.activeSlots[selectedIndex]
         zPie.rings[zPie.currentRing][newSlot].hl:Show()
+        zPie:ShowSelectionTooltip(
+            zPie.rings[zPie.currentRing][newSlot],
+            zPieDB[zPie.currentRing].items[newSlot])
         
         if arrowTex ~= "NONE" and arrowBehavior == "SNAP" then
             zPie.rings[zPie.currentRing][newSlot].arrow:Show()

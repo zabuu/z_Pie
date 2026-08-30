@@ -160,7 +160,14 @@ UIDropDownMenu_Initialize(ddBehavior, function()
         UIDropDownMenu_AddButton(info)
     end
 end)
-UIDropDownMenu_SetWidth(75, ddBehavior)
+UIDropDownMenu_SetWidth(65, ddBehavior)
+
+local namesBtn = CreateFlatButton("zPieNamesBtn", f, 68, 22, "")
+namesBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -16, -54)
+namesBtn:SetScript("OnClick", function()
+    zPieDB.showSelectionNames = not zPieDB.showSelectionNames
+    zPieConfigFrame:Refresh()
+end)
 
 -- ==========================================
 -- DIVIDER
@@ -633,6 +640,8 @@ function zPieConfigFrame:Refresh()
         UIDropDownMenu_SetSelectedID(ddBehavior, 2)
         UIDropDownMenu_SetText("Smooth", ddBehavior)
     end
+
+    namesBtn.text:SetText(zPieDB.showSelectionNames and "Names: On" or "Names: Off")
     
     -- Apply tab labels with truncation to match user inputs
     for i = 1, 10 do
