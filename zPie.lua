@@ -1,42 +1,70 @@
-AutoPie = CreateFrame("Frame", "AutoPieCoreFrame", UIParent)
-AutoPie.rings = {}
-AutoPie.currentRing = nil
-AutoPie.hoveredSlice = nil
-AutoPie.activeDegree = nil
-AutoPie.centerX = 0
-AutoPie.centerY = 0
-AutoPie.BTN_SIZE = 40
-AutoPie.DEADZONE = 18
+zPie = CreateFrame("Frame", "zPieCoreFrame", UIParent)
+zPie.TITLE = "|cffc77dffz|rPie"
+zPie.rings = {}
+zPie.currentRing = nil
+zPie.hoveredSlice = nil
+zPie.activeDegree = nil
+zPie.centerX = 0
+zPie.centerY = 0
+zPie.BTN_SIZE = 40
+zPie.DEADZONE = 18
 
-AutoPie.TAP_THRESHOLD = 0.20
-AutoPie.openTime = 0
-AutoPie.activeSlots = {} 
-AutoPie.spellCache = {}
+zPie.TAP_THRESHOLD = 0.20
+zPie.openTime = 0
+zPie.activeSlots = {}
+zPie.spellCache = {}
+zPie.pendingItem = nil
 
-AutoPie.arrowOffsets = {
+BINDING_HEADER_ZSUITE = "zSuite"
+for i = 1, 10 do
+    setglobal("BINDING_NAME_ZPIE_RING_" .. i, zPie.TITLE .. ": Ring " .. i)
+end
+
+zPie.arrowOffsets = {
     ["Interface\\Minimap\\MinimapArrow"] = 0,                             
     ["Interface\\Minimap\\ROTATING-MINIMAPGUIDEARROW"] = 0,               
     ["Interface\\MoneyFrame\\Arrow-Right-Up"] = math.pi / 2,              
     ["Interface\\ChatFrame\\ChatFrameExpandArrow"] = math.pi / 2,         
 }
 
-AutoPieScanner = CreateFrame("GameTooltip", "AutoPieScanner", UIParent, "GameTooltipTemplate")
-AutoPieScanner:SetOwner(UIParent, "ANCHOR_NONE")
+zPieScanner = CreateFrame("GameTooltip", "zPieScanner", UIParent, "GameTooltipTemplate")
+zPieScanner:SetOwner(UIParent, "ANCHOR_NONE")
 
-function AutoPie:SanitizeDB()
-    if not AutoPieDB then AutoPieDB = {} end
-    if not AutoPieDB.arrowStyle then AutoPieDB.arrowStyle = "Interface\\Minimap\\MinimapArrow" end
-    if not AutoPieDB.arrowBehavior then AutoPieDB.arrowBehavior = "SMOOTH" end
+function zPie:MigrateLegacyBindings()
+    local bindingsChanged = false
     for i = 1, 10 do
-        if not AutoPieDB[i] then
-            AutoPieDB[i] = { name = "Ring " .. i, anchor = "MOUSE", items = {}, radius = 75 }
+        local oldCommand = "AUTO" .. "PIE_RING_" .. i
+        local newCommand = "ZPIE_RING_" .. i
+        local key1, key2 = GetBindingKey(oldCommand)
+        if key1 then
+            SetBinding(key1, newCommand)
+            bindingsChanged = true
         end
-        if not AutoPieDB[i].items then AutoPieDB[i].items = {} end
-        if not AutoPieDB[i].radius then AutoPieDB[i].radius = 75 end
+        if key2 then
+            SetBinding(key2, newCommand)
+            bindingsChanged = true
+        end
+    end
+
+    if bindingsChanged then
+        SaveBindings(GetCurrentBindingSet())
     end
 end
 
-function AutoPie:CacheSpells()
+function zPie:SanitizeDB()
+    if not zPieDB then zPieDB = {} end
+    if not zPieDB.arrowStyle then zPieDB.arrowStyle = "Interface\\Minimap\\MinimapArrow" end
+    if not zPieDB.arrowBehavior then zPieDB.arrowBehavior = "SMOOTH" end
+    for i = 1, 10 do
+        if not zPieDB[i] then
+            zPieDB[i] = { name = "Ring " .. i, anchor = "MOUSE", items = {}, radius = 75 }
+        end
+        if not zPieDB[i].items then zPieDB[i].items = {} end
+        if not zPieDB[i].radius then zPieDB[i].radius = 75 end
+    end
+end
+
+function zPie:CacheSpells()
     local tempCache = {}
     local i = 1
     local count = 0
@@ -53,12 +81,12 @@ function AutoPie:CacheSpells()
     end
 end
 
-function AutoPie:RefreshDBIcons()
-    if not AutoPieDB then return end
+function zPie:RefreshDBIcons()
+    if not zPieDB then return end
     for r = 1, 10 do
-        if AutoPieDB[r] and AutoPieDB[r].items then
+        if zPieDB[r] and zPieDB[r].items then
             for s = 1, 8 do
-                local item = AutoPieDB[r].items[s]
+                local item = zPieDB[r].items[s]
                 if item and item.name then
                     if item.type == "SPELL_OR_ITEM" and self.spellCache[item.name] then
                         local tex = GetSpellTexture(self.spellCache[item.name], "BOOKTYPE_SPELL")
@@ -80,7 +108,7 @@ function AutoPie:RefreshDBIcons()
     end
 end
 
-function AutoPie:GetBufferSlot()
+function zPie:GetBufferSlot()
     for i = 120, 73, -1 do
         if not HasAction(i) then return i end
     end
@@ -125,8 +153,8 @@ local function SetRotatedTexCoords(tex, angle)
     tex:SetTexCoord(ULx, ULy, LLx, LLy, URx, URy, LRx, LRy)
 end
 
-function AutoPie:InitButtons()
-    self.compassFrame = CreateFrame("Frame", "AutoPieCompassFrame", UIParent)
+function zPie:InitButtons()
+    self.compassFrame = CreateFrame("Frame", "zPieCompassFrame", UIParent)
     self.compassFrame:SetFrameStrata("FULLSCREEN_DIALOG")
     self.compassFrame.arrows = {}
     for i = 1, 360 do
@@ -140,7 +168,7 @@ function AutoPie:InitButtons()
     for r = 1, 10 do
         self.rings[r] = {}
         for s = 1, 8 do
-            local name = "AutoPieRing" .. r .. "Slot" .. s
+            local name = "zPieRing" .. r .. "Slot" .. s
             local btn = CreateFrame("Button", name, UIParent)
             btn:SetWidth(self.BTN_SIZE)
             btn:SetHeight(self.BTN_SIZE)
@@ -193,7 +221,7 @@ function AutoPie:InitButtons()
     end
 end
 
-function AutoPie:HideAll()
+function zPie:HideAll()
     for r = 1, 10 do
         for s = 1, 8 do
             self.rings[r][s]:Hide()
@@ -215,7 +243,7 @@ function AutoPie:HideAll()
     self:Hide()
 end
 
-function AutoPie:GetIcon(itemData)
+function zPie:GetIcon(itemData)
     if not itemData or not itemData.name then return "Interface\\Icons\\INV_Misc_QuestionMark" end
     
     if self.spellCache and self.spellCache[itemData.name] then
@@ -238,7 +266,7 @@ function AutoPie:GetIcon(itemData)
     return "Interface\\Icons\\INV_Misc_QuestionMark"
 end
 
-function AutoPie:GetActionData(itemData)
+function zPie:GetActionData(itemData)
     local count, start, duration, enable = "", 0, 0, 0
     if not itemData or not itemData.name then return count, start, duration, enable end
     
@@ -254,7 +282,7 @@ function AutoPie:GetActionData(itemData)
     for bag = 0, 4 do
         for slot = 1, GetContainerNumSlots(bag) do
             local link = GetContainerItemLink(bag, slot)
-            if link and string.find(link, itemData.name) then
+            if link and self:ItemLinkMatches(link, itemData.name) then
                 isItem = true
                 local _, cnt = GetContainerItemInfo(bag, slot)
                 itemCount = itemCount + (cnt or 1)
@@ -269,46 +297,70 @@ function AutoPie:GetActionData(itemData)
     return count, start, duration, enable
 end
 
-function AutoPie:ExecuteAction(itemData)
+function zPie:ItemLinkMatches(link, itemName)
+    if not link or not itemName then return false end
+
+    local _, _, linkedName = string.find(link, "%[(.-)%]")
+    return linkedName == itemName
+end
+
+function zPie:FindItem(itemName)
+    for bag = 0, 4 do
+        for slot = 1, GetContainerNumSlots(bag) do
+            local link = GetContainerItemLink(bag, slot)
+            if self:ItemLinkMatches(link, itemName) then
+                return "BAG", bag, slot
+            end
+        end
+    end
+
+    for invSlot = 0, 19 do
+        local link = GetInventoryItemLink("player", invSlot)
+        if self:ItemLinkMatches(link, itemName) then
+            return "INVENTORY", invSlot
+        end
+    end
+end
+
+function zPie:ExecuteAction(itemData)
     if not itemData or not itemData.name then return end
     
     if itemData.type == "MACRO" then
         local idx = GetMacroIndexByName(itemData.name)
-        if idx > 0 then CastMacro(idx) end
+        if idx > 0 then RunMacro(idx) end
     else
         if self.spellCache[itemData.name] then
             CastSpellByName(itemData.name)
             return
         end
-        
-        for bag = 0, 4 do
-            for slot = 1, GetContainerNumSlots(bag) do
-                local link = GetContainerItemLink(bag, slot)
-                if link and string.find(link, itemData.name) then
-                    UseContainerItem(bag, slot)
-                    return
-                end
-            end
+
+        local location, first, second = self:FindItem(itemData.name)
+        if not location then return end
+
+        -- Using a bag item while Shift is still down invokes the client's
+        -- stack-splitting behavior. A Shift-bound ring can close before Shift
+        -- itself is released, so finish that item use on the following release.
+        if IsShiftKeyDown() then
+            self.pendingItem = itemData
+            return
         end
-        
-        for invSlot = 0, 19 do
-            local link = GetInventoryItemLink("player", invSlot)
-            if link and string.find(link, itemData.name) then
-                UseInventoryItem(invSlot)
-                return
-            end
+
+        if location == "BAG" then
+            UseContainerItem(first, second)
+        else
+            UseInventoryItem(first)
         end
     end
 end
 
-function AutoPie:OpenRing(ringIndex)
+function zPie:OpenRing(ringIndex)
     ringIndex = tonumber(ringIndex)
-    if not ringIndex or not AutoPieDB or not AutoPieDB[ringIndex] then return end
+    if not ringIndex or not zPieDB or not zPieDB[ringIndex] then return end
 
     self.openTime = GetTime()
     self.activeSlots = {}
 
-    local bindStr = GetBindingKey("AUTOPIE_RING_" .. ringIndex)
+    local bindStr = GetBindingKey("ZPIE_RING_" .. ringIndex)
     if bindStr then
         self.reqAlt = string.find(bindStr, "ALT%-") and true or false
         self.reqCtrl = string.find(bindStr, "CTRL%-") and true or false
@@ -317,7 +369,7 @@ function AutoPie:OpenRing(ringIndex)
         self.reqAlt, self.reqCtrl, self.reqShift = false, false, false
     end
 
-    local items = AutoPieDB[ringIndex].items or {}
+    local items = zPieDB[ringIndex].items or {}
     for s = 1, 8 do
         if items[s] and items[s].name and items[s].name ~= "" then
             table.insert(self.activeSlots, s)
@@ -330,7 +382,7 @@ function AutoPie:OpenRing(ringIndex)
     self:HideAll()
     self.currentRing = ringIndex
 
-    local ringData = AutoPieDB[ringIndex]
+    local ringData = zPieDB[ringIndex]
     local scale = UIParent:GetEffectiveScale()
     if ringData.anchor == "MOUSE" then
         local mx, my = GetCursorPosition()
@@ -343,8 +395,8 @@ function AutoPie:OpenRing(ringIndex)
 
     local angleStep = (2 * math.pi) / total
     local radius = ringData.radius or 75
-    local arrowTex = AutoPieDB.arrowStyle or "Interface\\Minimap\\MinimapArrow"
-    local arrowBehavior = AutoPieDB.arrowBehavior or "SMOOTH"
+    local arrowTex = zPieDB.arrowStyle or "Interface\\Minimap\\MinimapArrow"
+    local arrowBehavior = zPieDB.arrowBehavior or "SMOOTH"
     local arrowOffset = self.arrowOffsets[arrowTex] or 0
 
     if arrowTex == "NONE" then
@@ -421,7 +473,7 @@ function AutoPie:OpenRing(ringIndex)
     self:Show()
 end
 
-function AutoPie:CloseRing()
+function zPie:CloseRing()
     if not self.currentRing then return end
 
     local ringIndex = self.currentRing
@@ -437,47 +489,53 @@ function AutoPie:CloseRing()
     self:HideAll()
 
     if targetOriginalSlot then
-        local items = AutoPieDB[ringIndex].items
+        local items = zPieDB[ringIndex].items
         if items and items[targetOriginalSlot] then
             self:ExecuteAction(items[targetOriginalSlot])
         end
     end
 end
 
-AutoPie:SetScript("OnUpdate", function()
-    if not AutoPie.currentRing then return end
+zPie:SetScript("OnUpdate", function()
+    if zPie.pendingItem and not IsShiftKeyDown() then
+        local itemData = zPie.pendingItem
+        zPie.pendingItem = nil
+        zPie:ExecuteAction(itemData)
+    end
 
-    if (AutoPie.reqAlt and not IsAltKeyDown()) or 
-       (AutoPie.reqCtrl and not IsControlKeyDown()) or 
-       (AutoPie.reqShift and not IsShiftKeyDown()) then
-        AutoPie:CloseRing()
+    if not zPie.currentRing then return end
+
+    if (zPie.reqAlt and not IsAltKeyDown()) or
+       (zPie.reqCtrl and not IsControlKeyDown()) or
+       (zPie.reqShift and not IsShiftKeyDown()) then
+        zPie:CloseRing()
         return
     end
 
-    local total = table.getn(AutoPie.activeSlots)
+    local total = table.getn(zPie.activeSlots)
     if total == 0 then return end
     
-    local arrowTex = AutoPieDB.arrowStyle or "Interface\\Minimap\\MinimapArrow"
-    local arrowBehavior = AutoPieDB.arrowBehavior or "SMOOTH"
+    local arrowTex = zPieDB.arrowStyle or "Interface\\Minimap\\MinimapArrow"
+    local arrowBehavior = zPieDB.arrowBehavior or "SMOOTH"
 
     local scale = UIParent:GetEffectiveScale()
     local mx, my = GetCursorPosition()
     local curX, curY = mx / scale, my / scale
-    local dx, dy = curX - AutoPie.centerX, curY - AutoPie.centerY
+    local dx, dy = curX - zPie.centerX, curY - zPie.centerY
     local dist = math.sqrt(dx * dx + dy * dy)
 
-    if dist < AutoPie.DEADZONE then
-        if AutoPie.hoveredSlice then
-            local prevSlot = AutoPie.activeSlots[AutoPie.hoveredSlice]
-            AutoPie.rings[AutoPie.currentRing][prevSlot].hl:Hide()
+    if dist < zPie.DEADZONE then
+        if zPie.hoveredSlice then
+            local prevSlot = zPie.activeSlots[zPie.hoveredSlice]
+            zPie.rings[zPie.currentRing][prevSlot].hl:Hide()
             if arrowBehavior == "SNAP" then
-                AutoPie.rings[AutoPie.currentRing][prevSlot].arrow:Hide()
+                zPie.rings[zPie.currentRing][prevSlot].arrow:Hide()
             end
-            AutoPie.hoveredSlice = nil
+            zPie.hoveredSlice = nil
         end
-        if AutoPie.activeDegree and AutoPie.compassFrame.arrows[AutoPie.activeDegree] then
-            AutoPie.compassFrame.arrows[AutoPie.activeDegree]:Hide()
-            AutoPie.activeDegree = nil
+        if zPie.activeDegree and zPie.compassFrame.arrows[zPie.activeDegree] then
+            zPie.compassFrame.arrows[zPie.activeDegree]:Hide()
+            zPie.activeDegree = nil
         end
         return
     end
@@ -488,13 +546,13 @@ AutoPie:SetScript("OnUpdate", function()
         if curDeg <= 0 then curDeg = curDeg + 360 end
         if curDeg == 0 then curDeg = 360 end
 
-        if AutoPie.activeDegree ~= curDeg then
-            if AutoPie.activeDegree and AutoPie.compassFrame.arrows[AutoPie.activeDegree] then
-                AutoPie.compassFrame.arrows[AutoPie.activeDegree]:Hide()
+        if zPie.activeDegree ~= curDeg then
+            if zPie.activeDegree and zPie.compassFrame.arrows[zPie.activeDegree] then
+                zPie.compassFrame.arrows[zPie.activeDegree]:Hide()
             end
-            AutoPie.activeDegree = curDeg
-            if AutoPie.compassFrame.arrows[curDeg] then
-                AutoPie.compassFrame.arrows[curDeg]:Show()
+            zPie.activeDegree = curDeg
+            if zPie.compassFrame.arrows[curDeg] then
+                zPie.compassFrame.arrows[curDeg]:Show()
             end
         end
     end
@@ -507,40 +565,41 @@ AutoPie:SetScript("OnUpdate", function()
     local selectedIndex = math.floor((angle + (angleStep / 2)) / angleStep) + 1
     if selectedIndex > total then selectedIndex = 1 end
 
-    if AutoPie.hoveredSlice ~= selectedIndex then
-        if AutoPie.hoveredSlice then
-            local prevSlot = AutoPie.activeSlots[AutoPie.hoveredSlice]
-            AutoPie.rings[AutoPie.currentRing][prevSlot].hl:Hide()
+    if zPie.hoveredSlice ~= selectedIndex then
+        if zPie.hoveredSlice then
+            local prevSlot = zPie.activeSlots[zPie.hoveredSlice]
+            zPie.rings[zPie.currentRing][prevSlot].hl:Hide()
             if arrowBehavior == "SNAP" then
-                AutoPie.rings[AutoPie.currentRing][prevSlot].arrow:Hide()
+                zPie.rings[zPie.currentRing][prevSlot].arrow:Hide()
             end
         end
-        AutoPie.hoveredSlice = selectedIndex
-        local newSlot = AutoPie.activeSlots[selectedIndex]
-        AutoPie.rings[AutoPie.currentRing][newSlot].hl:Show()
+        zPie.hoveredSlice = selectedIndex
+        local newSlot = zPie.activeSlots[selectedIndex]
+        zPie.rings[zPie.currentRing][newSlot].hl:Show()
         
         if arrowTex ~= "NONE" and arrowBehavior == "SNAP" then
-            AutoPie.rings[AutoPie.currentRing][newSlot].arrow:Show()
+            zPie.rings[zPie.currentRing][newSlot].arrow:Show()
         end
     end
 end)
 
-AutoPie:RegisterEvent("VARIABLES_LOADED")
-AutoPie:RegisterEvent("SPELLS_CHANGED")
-AutoPie:SetScript("OnEvent", function()
+zPie:RegisterEvent("VARIABLES_LOADED")
+zPie:RegisterEvent("SPELLS_CHANGED")
+zPie:SetScript("OnEvent", function()
     if event == "VARIABLES_LOADED" then
-        AutoPie:SanitizeDB()
-        AutoPie:InitButtons()
-        AutoPie:CacheSpells()
+        zPie:MigrateLegacyBindings()
+        zPie:SanitizeDB()
+        zPie:InitButtons()
+        zPie:CacheSpells()
         
-        SLASH_AUTOPIE1 = "/autopie"
-        SLASH_AUTOPIE2 = "/pie"
-        SLASH_AUTOPIE3 = "/pi"
-        SlashCmdList["AUTOPIE"] = function()
-            if AutoPieConfigFrame:IsShown() then
-                AutoPieConfigFrame:Hide()
+        SLASH_ZPIE1 = "/zpie"
+        SLASH_ZPIE2 = "/zp"
+        SLASH_ZPIE3 = "/pi"
+        SlashCmdList["ZPIE"] = function()
+            if zPieConfigFrame:IsShown() then
+                zPieConfigFrame:Hide()
             else
-                AutoPieConfigFrame:Show()
+                zPieConfigFrame:Show()
             end
         end
         
@@ -549,12 +608,12 @@ AutoPie:SetScript("OnEvent", function()
         greetTimer:SetScript("OnUpdate", function()
             this.elapsed = this.elapsed + arg1
             if this.elapsed >= 4 then
-                DEFAULT_CHAT_FRAME:AddMessage("|cffff0000A|cffff7f00u|cffffff00t|cff00ff00o|cff00bfffP|cff7b68eei|cff9400d3e|r ~ Type /autopie, /pie, or /pi to configure.")
+                DEFAULT_CHAT_FRAME:AddMessage(zPie.TITLE .. " ~ Type /zpie, /zp, or /pi to configure.")
                 this:Hide()
                 this:SetScript("OnUpdate", nil)
             end
         end)
     elseif event == "SPELLS_CHANGED" then
-        AutoPie:CacheSpells()
+        zPie:CacheSpells()
     end
 end)

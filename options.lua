@@ -5,7 +5,7 @@ local flatBackdrop = {
     insets = { left = 1, right = 1, top = 1, bottom = 1 }
 }
 
-local f = CreateFrame("Frame", "AutoPieConfigFrame", UIParent)
+local f = CreateFrame("Frame", "zPieConfigFrame", UIParent)
 f:SetWidth(440)
 f:SetHeight(540)
 f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
@@ -22,11 +22,11 @@ f:Hide()
 
 local title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 title:SetPoint("TOP", f, "TOP", 0, -12)
-title:SetText("AutoPie")
+title:SetText(zPie.TITLE)
 
 local footer = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 footer:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 10)
-footer:SetText("AutoPie v1.0.1 - Made by Zab - Aug 20, 2026")
+footer:SetText(zPie.TITLE .. " v1.1.0 - Made by Zab - Aug 29, 2026")
 
 local function CreateFlatButton(name, parent, width, height, text)
     local btn = CreateFrame("Button", name, parent)
@@ -48,7 +48,7 @@ local function CreateFlatButton(name, parent, width, height, text)
     return btn
 end
 
-local closeBtn = CreateFlatButton("AutoPieCloseBtn", f, 24, 24, "X")
+local closeBtn = CreateFlatButton("zPieCloseBtn", f, 24, 24, "X")
 closeBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -8)
 closeBtn.text:SetTextColor(1, 0.3, 0.3)
 closeBtn:SetScript("OnClick", function() f:Hide() end)
@@ -68,7 +68,7 @@ lblArrow:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -60)
 lblArrow:SetText("Arrow Style:")
 lblArrow:SetTextColor(0.8, 0.8, 0.8)
 
-local ddArrow = CreateFrame("Frame", "AutoPieArrowDropdown", f, "UIDropDownMenuTemplate")
+local ddArrow = CreateFrame("Frame", "zPieArrowDropdown", f, "UIDropDownMenuTemplate")
 ddArrow:SetPoint("TOPLEFT", f, "TOPLEFT", 80, -54)
 
 local ddL = getglobal(ddArrow:GetName().."Left")
@@ -96,13 +96,13 @@ local arrowOptions = {
 
 local function OnArrowSelect()
     UIDropDownMenu_SetSelectedID(ddArrow, this:GetID())
-    if not AutoPieDB then AutoPieDB = {} end
-    AutoPieDB.arrowStyle = this.value
+    if not zPieDB then zPieDB = {} end
+    zPieDB.arrowStyle = this.value
     UIDropDownMenu_SetText(this:GetText(), ddArrow)
 end
 
 UIDropDownMenu_Initialize(ddArrow, function()
-    local currentStyle = (AutoPieDB and AutoPieDB.arrowStyle) or "Interface\\Minimap\\MinimapArrow"
+    local currentStyle = (zPieDB and zPieDB.arrowStyle) or "Interface\\Minimap\\MinimapArrow"
     for _, opt in ipairs(arrowOptions) do
         local info = {}
         info.text = opt.text
@@ -119,7 +119,7 @@ lblBehavior:SetPoint("TOPLEFT", f, "TOPLEFT", 220, -60)
 lblBehavior:SetText("Anim:")
 lblBehavior:SetTextColor(0.8, 0.8, 0.8)
 
-local ddBehavior = CreateFrame("Frame", "AutoPieBehaviorDropdown", f, "UIDropDownMenuTemplate")
+local ddBehavior = CreateFrame("Frame", "zPieBehaviorDropdown", f, "UIDropDownMenuTemplate")
 ddBehavior:SetPoint("TOPLEFT", f, "TOPLEFT", 255, -54)
 
 local bL = getglobal(ddBehavior:GetName().."Left")
@@ -144,13 +144,13 @@ local behaviorOptions = {
 
 local function OnBehaviorSelect()
     UIDropDownMenu_SetSelectedID(ddBehavior, this:GetID())
-    if not AutoPieDB then AutoPieDB = {} end
-    AutoPieDB.arrowBehavior = this.value
+    if not zPieDB then zPieDB = {} end
+    zPieDB.arrowBehavior = this.value
     UIDropDownMenu_SetText(this:GetText(), ddBehavior)
 end
 
 UIDropDownMenu_Initialize(ddBehavior, function()
-    local currentBehavior = (AutoPieDB and AutoPieDB.arrowBehavior) or "SMOOTH"
+    local currentBehavior = (zPieDB and zPieDB.arrowBehavior) or "SMOOTH"
     for _, opt in ipairs(behaviorOptions) do
         local info = {}
         info.text = opt.text
@@ -180,7 +180,7 @@ lblLocal:SetText("RING SETTINGS")
 
 local ringTabs = {}
 for i = 1, 10 do
-    local btn = CreateFlatButton("AutoPieRingTab"..i, f, 70, 22, "Ring "..i)
+    local btn = CreateFlatButton("zPieRingTab"..i, f, 70, 22, "Ring "..i)
     if i <= 5 then
         btn:SetPoint("TOPLEFT", f, "TOPLEFT", 18 + ((i-1) * 78), -115)
     else
@@ -191,8 +191,8 @@ for i = 1, 10 do
     btn:SetScript("OnClick", function()
         selectedRing = this.tabIndex
         listeningForBind = false
-        AutoPieKeyInterceptor:Hide()
-        AutoPieConfigFrame:Refresh()
+        zPieKeyInterceptor:Hide()
+        zPieConfigFrame:Refresh()
     end)
     ringTabs[i] = btn
 end
@@ -226,14 +226,14 @@ local function CreateEditBox(name, parent, width, labelText)
     return eb, label
 end
 
-local ebName, lblName = CreateEditBox("AutoPieRingNameEB", f, 120, "Ring Name:")
+local ebName, lblName = CreateEditBox("zPieRingNameEB", f, 120, "Ring Name:")
 lblName:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -175)
 ebName:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -189)
 
 ebName:SetScript("OnTextChanged", function()
-    if AutoPieDB and AutoPieDB[selectedRing] and this.isFocused then
+    if zPieDB and zPieDB[selectedRing] and this.isFocused then
         local txt = this:GetText()
-        AutoPieDB[selectedRing].name = txt
+        zPieDB[selectedRing].name = txt
         
         -- Live-update the corresponding tab text, truncating to 10 chars so it fits nicely
         local rName = txt == "" and ("Ring "..selectedRing) or txt
@@ -242,22 +242,22 @@ ebName:SetScript("OnTextChanged", function()
     end
 end)
 
-local anchorBtn = CreateFlatButton("AutoPieAnchorBtn", f, 110, 22, "")
+local anchorBtn = CreateFlatButton("zPieAnchorBtn", f, 110, 22, "")
 anchorBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 150, -189)
 anchorBtn:SetScript("OnClick", function()
-    if not AutoPieDB[selectedRing] then return end
-    if AutoPieDB[selectedRing].anchor == "MOUSE" then
-        AutoPieDB[selectedRing].anchor = "CENTER"
+    if not zPieDB[selectedRing] then return end
+    if zPieDB[selectedRing].anchor == "MOUSE" then
+        zPieDB[selectedRing].anchor = "CENTER"
     else
-        AutoPieDB[selectedRing].anchor = "MOUSE"
+        zPieDB[selectedRing].anchor = "MOUSE"
     end
-    AutoPieConfigFrame:Refresh()
+    zPieConfigFrame:Refresh()
 end)
 
-local bindBtn = CreateFlatButton("AutoPieKeybindBtn", f, 130, 22, "")
+local bindBtn = CreateFlatButton("zPieKeybindBtn", f, 130, 22, "")
 bindBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 270, -189)
 
-local keyInterceptor = CreateFrame("Frame", "AutoPieKeyInterceptor", UIParent)
+local keyInterceptor = CreateFrame("Frame", "zPieKeyInterceptor", UIParent)
 keyInterceptor:SetFrameStrata("FULLSCREEN_DIALOG")
 keyInterceptor:SetAllPoints(UIParent)
 keyInterceptor:EnableKeyboard(true)
@@ -271,7 +271,7 @@ local function ApplyBinding(key)
        key == "LALT" or key == "RALT" or key == "ALT" then return end
 
     if key == "ESCAPE" then
-        local key1, key2 = GetBindingKey("AUTOPIE_RING_" .. selectedRing)
+        local key1, key2 = GetBindingKey("ZPIE_RING_" .. selectedRing)
         if key1 then SetBinding(key1, nil) end
         if key2 then SetBinding(key2, nil) end
         SaveBindings(GetCurrentBindingSet())
@@ -280,17 +280,17 @@ local function ApplyBinding(key)
         local ctrl = IsControlKeyDown() and "CTRL-" or ""
         local shift = IsShiftKeyDown() and "SHIFT-" or ""
         local fullBinding = alt .. ctrl .. shift .. key
-        local key1, key2 = GetBindingKey("AUTOPIE_RING_" .. selectedRing)
+        local key1, key2 = GetBindingKey("ZPIE_RING_" .. selectedRing)
         if key1 then SetBinding(key1, nil) end
         if key2 then SetBinding(key2, nil) end
         
-        SetBinding(fullBinding, "AUTOPIE_RING_" .. selectedRing)
+        SetBinding(fullBinding, "ZPIE_RING_" .. selectedRing)
         SaveBindings(GetCurrentBindingSet())
     end
     
     listeningForBind = false
     keyInterceptor:Hide()
-    AutoPieConfigFrame:Refresh()
+    zPieConfigFrame:Refresh()
 end
 
 keyInterceptor:SetScript("OnKeyDown", function() ApplyBinding(arg1) end)
@@ -298,7 +298,7 @@ keyInterceptor:SetScript("OnMouseDown", function()
     if arg1 == "LeftButton" or arg1 == "RightButton" then
         listeningForBind = false
         keyInterceptor:Hide()
-        AutoPieConfigFrame:Refresh()
+        zPieConfigFrame:Refresh()
     elseif arg1 == "MiddleButton" then ApplyBinding("BUTTON3")
     elseif arg1 == "Button4" then ApplyBinding("BUTTON4")
     elseif arg1 == "Button5" then ApplyBinding("BUTTON5")
@@ -313,10 +313,10 @@ bindBtn:SetScript("OnClick", function()
         listeningForBind = true
         keyInterceptor:Show()
     end
-    AutoPieConfigFrame:Refresh()
+    zPieConfigFrame:Refresh()
 end)
 
-local radiusSlider = CreateFrame("Slider", "AutoPieRadiusSlider", f, "OptionsSliderTemplate")
+local radiusSlider = CreateFrame("Slider", "zPieRadiusSlider", f, "OptionsSliderTemplate")
 radiusSlider:SetWidth(150)
 radiusSlider:SetPoint("TOP", f, "TOP", 0, -230)
 radiusSlider:SetMinMaxValues(40, 150)
@@ -328,8 +328,8 @@ local radiusText = getglobal(radiusSlider:GetName() .. "Text")
 radiusSlider:SetScript("OnValueChanged", function()
     local val = math.floor(this:GetValue() + 0.5)
     radiusText:SetText("Radius: " .. val)
-    if AutoPieDB and AutoPieDB[selectedRing] then
-        AutoPieDB[selectedRing].radius = val
+    if zPieDB and zPieDB[selectedRing] then
+        zPieDB[selectedRing].radius = val
     end
 end)
 
@@ -337,7 +337,7 @@ end)
 -- PREVIEW UI
 -- ==========================================
 local function CaptureCursorToSlot(targetSlot)
-    local bufferSlot = AutoPie:GetBufferSlot()
+    local bufferSlot = zPie:GetBufferSlot()
     PlaceAction(bufferSlot)
     
     if HasAction(bufferSlot) then
@@ -350,14 +350,14 @@ local function CaptureCursorToSlot(targetSlot)
             actionIcon = icon or GetActionTexture(bufferSlot)
             actionType = "MACRO"
         else
-            AutoPieScanner:SetOwner(UIParent, "ANCHOR_NONE")
-            AutoPieScanner:ClearLines()
-            AutoPieScanner:SetAction(bufferSlot)
-            actionName = AutoPieScannerTextLeft1:GetText()
+            zPieScanner:SetOwner(UIParent, "ANCHOR_NONE")
+            zPieScanner:ClearLines()
+            zPieScanner:SetAction(bufferSlot)
+            actionName = zPieScannerTextLeft1:GetText()
             actionIcon = GetActionTexture(bufferSlot)
             
-            if (not actionIcon or actionIcon == "") and actionName and AutoPie.spellCache[actionName] then
-                actionIcon = GetSpellTexture(AutoPie.spellCache[actionName], "BOOKTYPE_SPELL")
+            if (not actionIcon or actionIcon == "") and actionName and zPie.spellCache[actionName] then
+                actionIcon = GetSpellTexture(zPie.spellCache[actionName], "BOOKTYPE_SPELL")
             end
             
             actionType = "SPELL_OR_ITEM"
@@ -367,8 +367,8 @@ local function CaptureCursorToSlot(targetSlot)
             actionIcon = "Interface\\Icons\\INV_Misc_QuestionMark"
         end
         
-        if not AutoPieDB[selectedRing].items then AutoPieDB[selectedRing].items = {} end
-        AutoPieDB[selectedRing].items[targetSlot] = {
+        if not zPieDB[selectedRing].items then zPieDB[selectedRing].items = {} end
+        zPieDB[selectedRing].items[targetSlot] = {
             name = actionName,
             icon = actionIcon,
             type = actionType
@@ -386,7 +386,7 @@ instruction:SetPoint("TOP", f, "TOP", 0, -270)
 instruction:SetText("Drag Spells, Macros, or Items into the center slot below:")
 instruction:SetTextColor(0.8, 0.8, 0.8)
 
-local centerBtn = CreateFrame("Button", "AutoPieConfigCenterBtn", f)
+local centerBtn = CreateFrame("Button", "zPieConfigCenterBtn", f)
 centerBtn:SetWidth(42)
 centerBtn:SetHeight(42)
 centerBtn:SetPoint("TOP", f, "TOP", 0, -380)
@@ -407,7 +407,7 @@ cText:SetText("Drop Here")
 cText:SetTextColor(0.6, 0.6, 0.6)
 
 local function HandleCenterDrop()
-    local items = AutoPieDB[selectedRing].items or {}
+    local items = zPieDB[selectedRing].items or {}
     local targetSlot = nil
     for i = 1, 8 do
         if not items[i] or not items[i].name then
@@ -420,7 +420,7 @@ local function HandleCenterDrop()
         UIErrorsFrame:AddMessage("Ring is full! Click an icon to remove it, or drop onto it to replace.", 1.0, 0.1, 0.1, 1.0)
         return
     end
-    if CaptureCursorToSlot(targetSlot) then AutoPieConfigFrame:Refresh() end
+    if CaptureCursorToSlot(targetSlot) then zPieConfigFrame:Refresh() end
 end
 
 centerBtn:RegisterForDrag("LeftButton")
@@ -451,7 +451,7 @@ end)
 
 local previewBtns = {}
 for s = 1, 8 do
-    local pBtn = CreateFrame("Button", "AutoPiePreview"..s, f)
+    local pBtn = CreateFrame("Button", "zPiePreview"..s, f)
     pBtn:SetWidth(36)
     pBtn:SetHeight(36)
     pBtn:SetBackdrop(flatBackdrop)
@@ -468,10 +468,10 @@ for s = 1, 8 do
     pBtn.slotIndex = s
     
     pBtn:SetScript("OnDragStart", function()
-        local item = AutoPieDB[selectedRing].items[this.slotIndex]
+        local item = zPieDB[selectedRing].items[this.slotIndex]
         if item then
             draggingSlot = this.slotIndex
-            local displayIcon = AutoPie:GetIcon(item)
+            local displayIcon = zPie:GetIcon(item)
             dragTex:SetTexture(displayIcon)
             dragFrame:Show()
             this:SetAlpha(0.2)
@@ -479,29 +479,29 @@ for s = 1, 8 do
     end)
     
     pBtn:SetScript("OnReceiveDrag", function()
-        if CaptureCursorToSlot(this.slotIndex) then AutoPieConfigFrame:Refresh() end
+        if CaptureCursorToSlot(this.slotIndex) then zPieConfigFrame:Refresh() end
     end)
 
     pBtn:SetScript("OnDragStop", function()
         if draggingSlot then
             for i = 1, 8 do
                 if previewBtns[i]:IsVisible() and MouseIsOver(previewBtns[i]) and i ~= draggingSlot then
-                    local temp = AutoPieDB[selectedRing].items[i]
-                    AutoPieDB[selectedRing].items[i] = AutoPieDB[selectedRing].items[draggingSlot]
-                    AutoPieDB[selectedRing].items[draggingSlot] = temp
+                    local temp = zPieDB[selectedRing].items[i]
+                    zPieDB[selectedRing].items[i] = zPieDB[selectedRing].items[draggingSlot]
+                    zPieDB[selectedRing].items[draggingSlot] = temp
                     break
                 end
             end
             draggingSlot = nil
             dragFrame:Hide()
-            AutoPieConfigFrame:Refresh()
+            zPieConfigFrame:Refresh()
         end
     end)
     
     pBtn:SetScript("OnClick", function()
         if not CaptureCursorToSlot(this.slotIndex) then
-            AutoPieDB[selectedRing].items[this.slotIndex] = nil
-            AutoPieConfigFrame:Refresh()
+            zPieDB[selectedRing].items[this.slotIndex] = nil
+            zPieConfigFrame:Refresh()
         end
     end)
     
@@ -521,7 +521,7 @@ for s = 1, 8 do
     pBtn:SetScript("OnUpdate", function()
         if not this.isHovered then return end
         
-        local itemData = AutoPieDB[selectedRing].items[this.slotIndex]
+        local itemData = zPieDB[selectedRing].items[this.slotIndex]
         if not itemData or not itemData.name then return end
         
         local desiredState = IsAltKeyDown() and "ALT" or "NORMAL"
@@ -532,7 +532,7 @@ for s = 1, 8 do
             if desiredState == "ALT" then
                 GameTooltip:SetOwner(this, "ANCHOR_CURSOR")
                 
-                local spellId = AutoPie.spellCache and AutoPie.spellCache[itemData.name]
+                local spellId = zPie.spellCache and zPie.spellCache[itemData.name]
                 if spellId then
                     GameTooltip:SetSpell(spellId, "BOOKTYPE_SPELL")
                 else
@@ -540,7 +540,7 @@ for s = 1, 8 do
                     for bag = 0, 4 do
                         for slot = 1, GetContainerNumSlots(bag) do
                             local link = GetContainerItemLink(bag, slot)
-                            if link and string.find(link, itemData.name) then
+                            if zPie:ItemLinkMatches(link, itemData.name) then
                                 foundLink = link
                                 break
                             end
@@ -550,7 +550,7 @@ for s = 1, 8 do
                     if not foundLink then
                         for invSlot = 0, 19 do
                             local link = GetInventoryItemLink("player", invSlot)
-                            if link and string.find(link, itemData.name) then
+                            if zPie:ItemLinkMatches(link, itemData.name) then
                                 foundLink = link
                                 break
                             end
@@ -587,13 +587,13 @@ for s = 1, 8 do
     previewBtns[s] = pBtn
 end
 
-function AutoPieConfigFrame:Refresh()
-    if not AutoPieDB then return end
+function zPieConfigFrame:Refresh()
+    if not zPieDB then return end
     
-    if AutoPie and AutoPie.CacheSpells then AutoPie:CacheSpells() end
-    if AutoPie and AutoPie.RefreshDBIcons then AutoPie:RefreshDBIcons() end
+    if zPie and zPie.CacheSpells then zPie:CacheSpells() end
+    if zPie and zPie.RefreshDBIcons then zPie:RefreshDBIcons() end
     
-    local data = AutoPieDB[selectedRing]
+    local data = zPieDB[selectedRing]
     if not ebName.isFocused then ebName:SetText(data.name or ("Ring "..selectedRing)) end
     anchorBtn.text:SetText("Anchor: " .. (data.anchor or "MOUSE"))
     
@@ -604,13 +604,13 @@ function AutoPieConfigFrame:Refresh()
     if listeningForBind then
         bindBtn.text:SetText("|cffff0000Press Key...|r")
     else
-        local bind = GetBindingKey("AUTOPIE_RING_" .. selectedRing)
+        local bind = GetBindingKey("ZPIE_RING_" .. selectedRing)
         bindBtn.text:SetText(bind and ("Key: " .. bind) or "Key: [None]")
     end
     
-    if AutoPieDB.arrowStyle then
+    if zPieDB.arrowStyle then
         for i, opt in ipairs(arrowOptions) do
-            if opt.value == AutoPieDB.arrowStyle then
+            if opt.value == zPieDB.arrowStyle then
                 UIDropDownMenu_SetSelectedID(ddArrow, i)
                 UIDropDownMenu_SetText(opt.text, ddArrow)
                 break
@@ -621,9 +621,9 @@ function AutoPieConfigFrame:Refresh()
         UIDropDownMenu_SetText("Silver", ddArrow)
     end
 
-    if AutoPieDB.arrowBehavior then
+    if zPieDB.arrowBehavior then
         for i, opt in ipairs(behaviorOptions) do
-            if opt.value == AutoPieDB.arrowBehavior then
+            if opt.value == zPieDB.arrowBehavior then
                 UIDropDownMenu_SetSelectedID(ddBehavior, i)
                 UIDropDownMenu_SetText(opt.text, ddBehavior)
                 break
@@ -636,7 +636,7 @@ function AutoPieConfigFrame:Refresh()
     
     -- Apply tab labels with truncation to match user inputs
     for i = 1, 10 do
-        local rName = (AutoPieDB[i] and AutoPieDB[i].name) or ("Ring "..i)
+        local rName = (zPieDB[i] and zPieDB[i].name) or ("Ring "..i)
         if rName == "" then rName = "Ring "..i end
         local shortName = string.len(rName) > 10 and string.sub(rName, 1, 9).."." or rName
         ringTabs[i].text:SetText(shortName)
@@ -677,7 +677,7 @@ function AutoPieConfigFrame:Refresh()
             btn:ClearAllPoints()
             btn:SetPoint("CENTER", centerBtn, "CENTER", bx, by)
             
-            local displayIcon = AutoPie:GetIcon(items[origSlot])
+            local displayIcon = zPie:GetIcon(items[origSlot])
             btn.icon:SetTexture(displayIcon)
             btn:SetAlpha(1.0)
             btn:Show()
@@ -688,7 +688,7 @@ end
 f:SetScript("OnShow", function()
     listeningForBind = false
     keyInterceptor:Hide()
-    AutoPieConfigFrame:Refresh()
+    zPieConfigFrame:Refresh()
 end)
 
 f:SetScript("OnHide", function()
