@@ -348,13 +348,32 @@ local function CaptureCursorToSlot(targetSlot)
     PlaceAction(bufferSlot)
     
     if HasAction(bufferSlot) then
-        local actionName, actionIcon, actionType
+        local actionName, actionIcon, actionType, macroIndex
         local macroName = GetActionText(bufferSlot)
+        local actionKind, actionID
+        if type(GetActionInfo) == "function" then
+            actionKind, actionID = GetActionInfo(bufferSlot)
+        end
+        local superMacroName
+        if type(SM_ACTION) == "table" then
+            superMacroName = SM_ACTION[bufferSlot]
+        end
         
-        if macroName then
-            local _, icon = GetMacroInfo(GetMacroIndexByName(macroName))
-            actionName = macroName
-            actionIcon = icon or GetActionTexture(bufferSlot)
+        if superMacroName and type(GetSuperMacroInfo) == "function" then
+            actionName = superMacroName
+            actionIcon = GetSuperMacroInfo(superMacroName, "texture") or GetActionTexture(bufferSlot)
+            actionType = "SUPER_MACRO"
+        elseif macroName or (actionKind and string.lower(actionKind) == "macro") then
+            macroIndex = actionID or (macroName and GetMacroIndexByName(macroName))
+            if macroIndex and macroIndex > 0 then
+                local indexedName, icon = GetMacroInfo(macroIndex)
+                actionName = indexedName or macroName
+                actionIcon = icon or GetActionTexture(bufferSlot)
+            else
+                actionName = macroName
+                actionIcon = GetActionTexture(bufferSlot)
+                macroIndex = nil
+            end
             actionType = "MACRO"
         else
             zPieScanner:SetOwner(UIParent, "ANCHOR_NONE")
@@ -378,11 +397,13 @@ local function CaptureCursorToSlot(targetSlot)
         zPieDB[selectedRing].items[targetSlot] = {
             name = actionName,
             icon = actionIcon,
-            type = actionType
+            type = actionType,
+            macroIndex = macroIndex
         }
         
         PickupAction(bufferSlot)
         ClearCursor()
+        if superMacroName and SM_CURSOR == superMacroName then SM_CURSOR = nil end
         return true
     end
     return false
@@ -573,8 +594,10 @@ for s = 1, 8 do
                         GameTooltip:SetHyperlink(linkString)
                     else
                         GameTooltip:SetText(itemData.name, 1, 1, 1)
-                        if itemData.type == "MACRO" then
-                            GameTooltip:AddLine("Macro", 0.5, 0.5, 0.5)
+                        if itemData.type == "MACRO" or itemData.type == "SUPER_MACRO" then
+                            GameTooltip:AddLine(
+                                itemData.type == "SUPER_MACRO" and "SuperMacro" or "Macro",
+                                0.5, 0.5, 0.5)
                         end
                     end
                 end

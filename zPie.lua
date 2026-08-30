@@ -94,13 +94,21 @@ function zPie:RefreshDBIcons()
                         if tex and tex ~= "" then
                             item.icon = tex
                         end
-                    elseif item.type == "MACRO" then
-                        local idx = GetMacroIndexByName(item.name)
-                        if idx > 0 then
+                    elseif item.type == "MACRO" or item.type == "SUPER_MACRO" then
+                        local idx = item.macroIndex or GetMacroIndexByName(item.name)
+                        if idx and idx > 0 then
                             local _, tex = GetMacroInfo(idx)
                             if tex and tex ~= "" then
                                 item.icon = tex
                             end
+                            item.macroIndex = idx
+                            item.type = "MACRO"
+                        elseif type(GetSuperMacroInfo) == "function" and
+                               GetSuperMacroInfo(item.name, "body") then
+                            local tex = GetSuperMacroInfo(item.name, "texture")
+                            if tex and tex ~= "" then item.icon = tex end
+                            item.macroIndex = nil
+                            item.type = "SUPER_MACRO"
                         end
                     end
                 end
@@ -328,11 +336,14 @@ function zPie:GetIcon(itemData)
     end
     
     if itemData.type == "MACRO" then
-        local idx = GetMacroIndexByName(itemData.name)
-        if idx > 0 then
+        local idx = itemData.macroIndex or GetMacroIndexByName(itemData.name)
+        if idx and idx > 0 then
             local _, tex = GetMacroInfo(idx)
             if tex and tex ~= "" then return tex end
         end
+    elseif itemData.type == "SUPER_MACRO" and type(GetSuperMacroInfo) == "function" then
+        local tex = GetSuperMacroInfo(itemData.name, "texture")
+        if tex and tex ~= "" then return tex end
     end
     
     if itemData.icon and itemData.icon ~= "" then
@@ -346,7 +357,9 @@ function zPie:GetActionData(itemData)
     local count, start, duration, enable = "", 0, 0, 0
     if not itemData or not itemData.name then return count, start, duration, enable end
     
-    if itemData.type == "MACRO" then return count, start, duration, enable end
+    if itemData.type == "MACRO" or itemData.type == "SUPER_MACRO" then
+        return count, start, duration, enable
+    end
     
     if self.spellCache[itemData.name] then
         start, duration, enable = GetSpellCooldown(self.spellCache[itemData.name], "BOOKTYPE_SPELL")
@@ -381,13 +394,61 @@ function zPie:ItemLinkMatches(link, itemName)
 end
 
 function zPie:IsItemEquipped(itemData)
-    if not itemData or not itemData.name or itemData.type == "MACRO" then return false end
+    if not itemData or not itemData.name or itemData.type == "MACRO" or
+       itemData.type == "SUPER_MACRO" then return false end
 
     for invSlot = 0, 19 do
         local link = GetInventoryItemLink("player", invSlot)
         if self:ItemLinkMatches(link, itemData.name) then
             return true
         end
+    end
+
+    return false
+end
+
+function zPie:ExecuteMacro(itemData)
+    local macroIndex = itemData.macroIndex
+    if macroIndex then
+        local currentName = GetMacroInfo(macroIndex)
+        if currentName ~= itemData.name then macroIndex = nil end
+    end
+    if not macroIndex then
+        macroIndex = GetMacroIndexByName(itemData.name)
+        if not macroIndex or macroIndex == 0 then macroIndex = nil end
+    end
+
+    if macroIndex then
+        itemData.macroIndex = macroIndex
+        itemData.type = "MACRO"
+        if type(RunMacro) == "function" then
+            RunMacro(macroIndex)
+            return true
+        elseif type(SuperMacro_RunMacro) == "function" then
+            SuperMacro_RunMacro(macroIndex)
+            return true
+        end
+    end
+
+    if type(GetSuperMacroInfo) == "function" and
+       GetSuperMacroInfo(itemData.name, "body") then
+        itemData.macroIndex = nil
+        itemData.type = "SUPER_MACRO"
+        if type(RunSuperMacro) == "function" then
+            RunSuperMacro(itemData.name)
+            return true
+        end
+    end
+
+    if type(CleveRoids) == "table" and
+       type(CleveRoids.ExecuteMacroByName) == "function" then
+        CleveRoids.ExecuteMacroByName(macroIndex or itemData.name)
+        return true
+    end
+
+    if type(RunMacro) == "function" then
+        RunMacro(macroIndex or itemData.name)
+        return true
     end
 
     return false
@@ -414,9 +475,8 @@ end
 function zPie:ExecuteAction(itemData)
     if not itemData or not itemData.name then return end
     
-    if itemData.type == "MACRO" then
-        local idx = GetMacroIndexByName(itemData.name)
-        if idx > 0 then RunMacro(idx) end
+    if itemData.type == "MACRO" or itemData.type == "SUPER_MACRO" then
+        self:ExecuteMacro(itemData)
     else
         if self.spellCache[itemData.name] then
             CastSpellByName(itemData.name)
