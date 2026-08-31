@@ -567,6 +567,37 @@ function zPie:FindItem(itemName)
     end
 end
 
+function zPie:UseItem(itemData, location, first, second)
+    if type(CloseStackSplitFrame) == "function" then CloseStackSplitFrame() end
+    if CursorHasItem and CursorHasItem() then ClearCursor() end
+
+    local nampowerAPI = CleveRoids and CleveRoids.NampowerAPI
+    if type(nampowerAPI) == "table" and
+       type(nampowerAPI.UseItemIdOrName) == "function" then
+        local result = nampowerAPI.UseItemIdOrName(itemData.name)
+        if result == 1 or result == true then return true end
+    end
+
+    if location == "BAG" and C_Item and type(C_Item.UseItemByName) == "function" then
+        C_Item.UseItemByName(itemData.name)
+        return true
+    end
+
+    -- Stock-client fallback. Delay only this path while Shift is held because
+    -- UseContainerItem can otherwise split one potion from its stack.
+    if IsShiftKeyDown() then
+        self.pendingItem = itemData
+        return true
+    end
+
+    if location == "BAG" then
+        UseContainerItem(first, second)
+    else
+        UseInventoryItem(first)
+    end
+    return true
+end
+
 function zPie:ExecuteAction(itemData)
     if not itemData or not itemData.name then return end
     
@@ -580,20 +611,7 @@ function zPie:ExecuteAction(itemData)
 
         local location, first, second = self:FindItem(itemData.name)
         if not location then return end
-
-        -- Using a bag item while Shift is still down invokes the client's
-        -- stack-splitting behavior. A Shift-bound ring can close before Shift
-        -- itself is released, so finish that item use on the following release.
-        if IsShiftKeyDown() then
-            self.pendingItem = itemData
-            return
-        end
-
-        if location == "BAG" then
-            UseContainerItem(first, second)
-        else
-            UseInventoryItem(first)
-        end
+        self:UseItem(itemData, location, first, second)
     end
 end
 
