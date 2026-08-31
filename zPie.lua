@@ -550,6 +550,15 @@ function zPie:ExecuteMacro(itemData)
 end
 
 function zPie:FindItem(itemName)
+    -- Prefer an equipped copy so usable equipment (such as trinkets) activates
+    -- instead of resolving to another copy in the bags.
+    for invSlot = 0, 19 do
+        local link = GetInventoryItemLink("player", invSlot)
+        if self:ItemLinkMatches(link, itemName) then
+            return "INVENTORY", invSlot
+        end
+    end
+
     for bag = 0, 4 do
         for slot = 1, GetContainerNumSlots(bag) do
             local link = GetContainerItemLink(bag, slot)
@@ -558,18 +567,54 @@ function zPie:FindItem(itemName)
             end
         end
     end
+end
 
-    for invSlot = 0, 19 do
-        local link = GetInventoryItemLink("player", invSlot)
-        if self:ItemLinkMatches(link, itemName) then
-            return "INVENTORY", invSlot
-        end
+function zPie:IsEquippableItemLink(link)
+    if not link then return false end
+
+    if type(IsEquippableItem) == "function" and IsEquippableItem(link) then
+        return true
     end
+
+    local _, _, itemId = string.find(link, "item:(%d+)")
+    local nampowerAPI = CleveRoids and CleveRoids.NampowerAPI
+    if itemId and type(nampowerAPI) == "table" and
+       type(nampowerAPI.GetItemEquipSlot) == "function" then
+        local equipSlot = nampowerAPI.GetItemEquipSlot(tonumber(itemId))
+        if equipSlot then return true end
+    end
+
+    local _, _, _, _, _, _, _, _, equipLocation = GetItemInfo(link)
+    return equipLocation and equipLocation ~= ""
 end
 
 function zPie:UseItem(itemData, location, first, second)
     if type(CloseStackSplitFrame) == "function" then CloseStackSplitFrame() end
     if CursorHasItem and CursorHasItem() then ClearCursor() end
+
+    -- Equipped items should be activated from their exact inventory slot.
+    if location == "INVENTORY" then
+        UseInventoryItem(first)
+        return true
+    end
+
+    -- Equippable bag items should be equipped, not sent through the consumable
+    -- item API. Auto-equip also handles items with multiple valid slots.
+    local link = GetContainerItemLink(first, second)
+    if self:IsEquippableItemLink(link) then
+        if type(PickupContainerItem) == "function" and
+           type(AutoEquipCursorItem) == "function" then
+            PickupContainerItem(first, second)
+            if not CursorHasItem or CursorHasItem() then
+                AutoEquipCursorItem()
+                return true
+            end
+        end
+
+        if CursorHasItem and CursorHasItem() then ClearCursor() end
+        UseContainerItem(first, second)
+        return true
+    end
 
     -- Nampower's target argument is optional, but some API wrappers forward an
     -- explicit nil as a second argument. The native function rejects that call,
@@ -586,7 +631,7 @@ function zPie:UseItem(itemData, location, first, second)
         end
     end
 
-    if location == "BAG" and C_Item and type(C_Item.UseItemByName) == "function" then
+    if C_Item and type(C_Item.UseItemByName) == "function" then
         C_Item.UseItemByName(itemData.name)
         return true
     end
@@ -598,11 +643,7 @@ function zPie:UseItem(itemData, location, first, second)
         return true
     end
 
-    if location == "BAG" then
-        UseContainerItem(first, second)
-    else
-        UseInventoryItem(first)
-    end
+    UseContainerItem(first, second)
     return true
 end
 
