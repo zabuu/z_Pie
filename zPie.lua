@@ -571,11 +571,19 @@ function zPie:UseItem(itemData, location, first, second)
     if type(CloseStackSplitFrame) == "function" then CloseStackSplitFrame() end
     if CursorHasItem and CursorHasItem() then ClearCursor() end
 
-    local nampowerAPI = CleveRoids and CleveRoids.NampowerAPI
-    if type(nampowerAPI) == "table" and
-       type(nampowerAPI.UseItemIdOrName) == "function" then
-        local result = nampowerAPI.UseItemIdOrName(itemData.name)
+    -- Nampower's target argument is optional, but some API wrappers forward an
+    -- explicit nil as a second argument. The native function rejects that call,
+    -- so invoke it directly with exactly one argument when it is available.
+    if type(UseItemIdOrName) == "function" then
+        local result = UseItemIdOrName(itemData.name)
         if result == 1 or result == true then return true end
+    else
+        local nampowerAPI = CleveRoids and CleveRoids.NampowerAPI
+        if type(nampowerAPI) == "table" and
+           type(nampowerAPI.UseItemIdOrName) == "function" then
+            local result = nampowerAPI.UseItemIdOrName(itemData.name)
+            if result == 1 or result == true then return true end
+        end
     end
 
     if location == "BAG" and C_Item and type(C_Item.UseItemByName) == "function" then
