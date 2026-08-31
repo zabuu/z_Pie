@@ -14,6 +14,7 @@ zPie.openTime = 0
 zPie.activeSlots = {}
 zPie.spellCache = {}
 zPie.pendingItem = nil
+zPie.updateDriver = CreateFrame("Frame", "zPieUpdateDriver", UIParent)
 
 BINDING_HEADER_ZSUITE = "zSuite"
 for i = 1, 10 do
@@ -327,19 +328,103 @@ function zPie:ShowSelectionTooltip(btn, itemData)
     tooltip:Show()
 end
 
+function zPie:GetMacroBody(itemData)
+    if not itemData or not itemData.name then return nil end
+
+    if itemData.type == "SUPER_MACRO" and type(GetSuperMacroInfo) == "function" then
+        return GetSuperMacroInfo(itemData.name, "body")
+    end
+
+    local macroIndex = itemData.macroIndex or GetMacroIndexByName(itemData.name)
+    if macroIndex and macroIndex > 0 then
+        local _, _, body = GetMacroInfo(macroIndex)
+        return body
+    end
+
+    if type(GetSuperMacroInfo) == "function" then
+        return GetSuperMacroInfo(itemData.name, "body")
+    end
+end
+
+function zPie:GetMacroTooltipArg(itemData)
+    local body = self:GetMacroBody(itemData)
+    if not body then return nil end
+
+    -- Prefix a newline so the same pattern handles the first and later lines.
+    local _, _, arg = string.find("\n" .. body, "\n%s*#showtooltip%s+([^\r\n]+)")
+    if not arg then return nil end
+
+    arg = string.gsub(arg, "^%s+", "")
+    arg = string.gsub(arg, "%s+$", "")
+    if arg == "" then return nil end
+    return arg
+end
+
+function zPie:GetDisplayLookupName(itemData)
+    if not itemData or not itemData.name then return nil end
+    if itemData.type == "MACRO" or itemData.type == "SUPER_MACRO" then
+        return self:GetMacroTooltipArg(itemData)
+    end
+    return itemData.name
+end
+
+function zPie:GetItemTexture(itemName)
+    if not itemName then return nil end
+
+    if type(CleveRoids) == "table" and type(CleveRoids.GetItem) == "function" then
+        local item = CleveRoids.GetItem(itemName)
+        if item and item.texture and item.texture ~= "" then return item.texture end
+    end
+
+    for invSlot = 0, 19 do
+        local link = GetInventoryItemLink("player", invSlot)
+        if self:ItemLinkMatches(link, itemName) then
+            return GetInventoryItemTexture("player", invSlot)
+        end
+    end
+
+    for bag = 0, 4 do
+        for slot = 1, GetContainerNumSlots(bag) do
+            local link = GetContainerItemLink(bag, slot)
+            if self:ItemLinkMatches(link, itemName) then
+                local texture = GetContainerItemInfo(bag, slot)
+                return texture
+            end
+        end
+    end
+end
+
+function zPie:GetResolvedTexture(lookupName)
+    if not lookupName then return nil end
+
+    if self.spellCache and self.spellCache[lookupName] then
+        local texture = GetSpellTexture(self.spellCache[lookupName], "BOOKTYPE_SPELL")
+        if texture and texture ~= "" then return texture end
+    end
+
+    if type(CleveRoids) == "table" and type(CleveRoids.GetSpell) == "function" then
+        local spell = CleveRoids.GetSpell(lookupName)
+        if spell and spell.texture and spell.texture ~= "" then return spell.texture end
+    end
+
+    return self:GetItemTexture(lookupName)
+end
+
 function zPie:GetIcon(itemData)
     if not itemData or not itemData.name then return "Interface\\Icons\\INV_Misc_QuestionMark" end
-    
-    if self.spellCache and self.spellCache[itemData.name] then
-        local tex = GetSpellTexture(self.spellCache[itemData.name], "BOOKTYPE_SPELL")
-        if tex and tex ~= "" then return tex end
-    end
-    
+
+    local lookupName = self:GetDisplayLookupName(itemData)
+    local resolvedTexture = self:GetResolvedTexture(lookupName)
+    if resolvedTexture then return resolvedTexture end
+
     if itemData.type == "MACRO" then
         local idx = itemData.macroIndex or GetMacroIndexByName(itemData.name)
         if idx and idx > 0 then
             local _, tex = GetMacroInfo(idx)
-            if tex and tex ~= "" then return tex end
+            if tex and tex ~= "" and
+               string.lower(tex) ~= "interface\\icons\\inv_misc_questionmark" then
+                return tex
+            end
         end
     elseif itemData.type == "SUPER_MACRO" and type(GetSuperMacroInfo) == "function" then
         local tex = GetSuperMacroInfo(itemData.name, "texture")
@@ -356,22 +441,32 @@ end
 function zPie:GetActionData(itemData)
     local count, start, duration, enable = "", 0, 0, 0
     if not itemData or not itemData.name then return count, start, duration, enable end
-    
-    if itemData.type == "MACRO" or itemData.type == "SUPER_MACRO" then
+
+    local lookupName = self:GetDisplayLookupName(itemData)
+    if not lookupName then return count, start, duration, enable end
+
+    if self.spellCache[lookupName] then
+        start, duration, enable = GetSpellCooldown(self.spellCache[lookupName], "BOOKTYPE_SPELL")
         return count, start, duration, enable
     end
-    
-    if self.spellCache[itemData.name] then
-        start, duration, enable = GetSpellCooldown(self.spellCache[itemData.name], "BOOKTYPE_SPELL")
-        return count, start, duration, enable
-    end
-    
+
     local itemCount = 0
     local isItem = false
+
+    for invSlot = 1, 19 do
+        local link = GetInventoryItemLink("player", invSlot)
+        if self:ItemLinkMatches(link, lookupName) then
+            isItem = true
+            if start == 0 then
+                start, duration, enable = GetInventoryItemCooldown("player", invSlot)
+            end
+        end
+    end
+
     for bag = 0, 4 do
         for slot = 1, GetContainerNumSlots(bag) do
             local link = GetContainerItemLink(bag, slot)
-            if link and self:ItemLinkMatches(link, itemData.name) then
+            if self:ItemLinkMatches(link, lookupName) then
                 isItem = true
                 local _, cnt = GetContainerItemInfo(bag, slot)
                 itemCount = itemCount + (cnt or 1)
@@ -394,12 +489,12 @@ function zPie:ItemLinkMatches(link, itemName)
 end
 
 function zPie:IsItemEquipped(itemData)
-    if not itemData or not itemData.name or itemData.type == "MACRO" or
-       itemData.type == "SUPER_MACRO" then return false end
+    local lookupName = self:GetDisplayLookupName(itemData)
+    if not lookupName then return false end
 
     for invSlot = 0, 19 do
         local link = GetInventoryItemLink("player", invSlot)
-        if self:ItemLinkMatches(link, itemData.name) then
+        if self:ItemLinkMatches(link, lookupName) then
             return true
         end
     end
@@ -502,6 +597,25 @@ function zPie:ExecuteAction(itemData)
     end
 end
 
+function zPie:GetBindingKeyCode(binding)
+    if not binding then return nil end
+
+    local key = string.gsub(binding, "ALT%-", "")
+    key = string.gsub(key, "CTRL%-", "")
+    key = string.gsub(key, "SHIFT%-", "")
+    local lowerKey = string.lower(key)
+
+    if lowerKey == "`" or lowerKey == "~" or lowerKey == "tilde" then return 256 end
+
+    if CleveRoids and CleveRoids.KEY_NAMES and CleveRoids.KEY_NAMES[lowerKey] then
+        return CleveRoids.KEY_NAMES[lowerKey]
+    end
+
+    if string.len(key) == 1 then
+        return string.byte(string.upper(key))
+    end
+end
+
 function zPie:OpenRing(ringIndex)
     ringIndex = tonumber(ringIndex)
     if not ringIndex or not zPieDB or not zPieDB[ringIndex] then return end
@@ -514,8 +628,13 @@ function zPie:OpenRing(ringIndex)
         self.reqAlt = string.find(bindStr, "ALT%-") and true or false
         self.reqCtrl = string.find(bindStr, "CTRL%-") and true or false
         self.reqShift = string.find(bindStr, "SHIFT%-") and true or false
+        local _, _, buttonNumber = string.find(bindStr, "BUTTON(%d+)")
+        self.reqButton = buttonNumber and tonumber(buttonNumber) or nil
+        self.reqKeyCode = self:GetBindingKeyCode(bindStr)
     else
         self.reqAlt, self.reqCtrl, self.reqShift = false, false, false
+        self.reqButton = nil
+        self.reqKeyCode = nil
     end
 
     local items = zPieDB[ringIndex].items or {}
@@ -654,7 +773,7 @@ function zPie:CloseRing()
     end
 end
 
-zPie:SetScript("OnUpdate", function()
+zPie.updateDriver:SetScript("OnUpdate", function()
     if zPie.pendingItem and not IsShiftKeyDown() then
         local itemData = zPie.pendingItem
         zPie.pendingItem = nil
@@ -665,7 +784,9 @@ zPie:SetScript("OnUpdate", function()
 
     if (zPie.reqAlt and not IsAltKeyDown()) or
        (zPie.reqCtrl and not IsControlKeyDown()) or
-       (zPie.reqShift and not IsShiftKeyDown()) then
+       (zPie.reqShift and not IsShiftKeyDown()) or
+       (zPie.reqButton and type(IsMouseButtonDown) == "function" and
+        not IsMouseButtonDown(zPie.reqButton)) then
         zPie:CloseRing()
         return
     end
@@ -753,6 +874,12 @@ zPie:SetScript("OnEvent", function()
         zPie:SanitizeDB()
         zPie:InitButtons()
         zPie:CacheSpells()
+
+        if CleveRoids and CleveRoids.NampowerAPI and
+           CleveRoids.NampowerAPI.features and
+           CleveRoids.NampowerAPI.features.hasKeyEvents then
+            zPie:RegisterEvent("KEY_UP")
+        end
         
         SLASH_ZPIE1 = "/zpie"
         SLASH_ZPIE2 = "/zp"
@@ -775,6 +902,10 @@ zPie:SetScript("OnEvent", function()
                 this:SetScript("OnUpdate", nil)
             end
         end)
+    elseif event == "KEY_UP" then
+        if zPie.currentRing and zPie.reqKeyCode and arg1 == zPie.reqKeyCode then
+            zPie:CloseRing()
+        end
     elseif event == "SPELLS_CHANGED" then
         zPie:CacheSpells()
     end
