@@ -72,7 +72,7 @@ function zPie:CacheSpells()
     local i = 1
     local count = 0
     while true do
-        local spellName = GetSpellName(i, "BOOKTYPE_SPELL")
+        local spellName = GetSpellName(i, BOOKTYPE_SPELL or "spell")
         if not spellName then break end
         tempCache[spellName] = i
         i = i + 1
@@ -92,7 +92,7 @@ function zPie:RefreshDBIcons()
                 local item = zPieDB[r].items[s]
                 if item and item.name then
                     if item.type == "SPELL_OR_ITEM" and self.spellCache[item.name] then
-                        local tex = GetSpellTexture(self.spellCache[item.name], "BOOKTYPE_SPELL")
+                        local tex = GetSpellTexture(self.spellCache[item.name], BOOKTYPE_SPELL or "spell")
                         if tex and tex ~= "" then
                             item.icon = tex
                         end
@@ -140,6 +140,13 @@ local function IsSkillActive(iconTexture)
         for i = 1, numForms do
             local icon, _, isActive = GetShapeshiftFormInfo(i)
             if isActive and icon == iconTexture then return true end
+        end
+    end
+
+    if type(GetTrackingTexture) == "function" then
+        local trackTex = GetTrackingTexture()
+        if trackTex and trackTex ~= "" and trackTex == iconTexture then
+            return true
         end
     end
     
@@ -405,7 +412,7 @@ function zPie:GetResolvedTexture(lookupName)
     if not lookupName then return nil end
 
     if self.spellCache and self.spellCache[lookupName] then
-        local texture = GetSpellTexture(self.spellCache[lookupName], "BOOKTYPE_SPELL")
+        local texture = GetSpellTexture(self.spellCache[lookupName], BOOKTYPE_SPELL or "spell")
         if texture and texture ~= "" then return texture end
     end
 
@@ -453,7 +460,7 @@ function zPie:GetActionData(itemData)
     if not lookupName then return count, start, duration, enable end
 
     if self.spellCache[lookupName] then
-        start, duration, enable = GetSpellCooldown(self.spellCache[lookupName], "BOOKTYPE_SPELL")
+        start, duration, enable = GetSpellCooldown(self.spellCache[lookupName], BOOKTYPE_SPELL or "spell")
         return count, start, duration, enable
     end
 
@@ -824,6 +831,49 @@ function zPie:OpenRing(ringIndex)
     self:Show()
 end
 
+function zPie:IsItemAvailable(itemData, isCurrentlyActive)
+    if not itemData or not itemData.name or itemData.name == "" then 
+        return false 
+    end
+
+    if isCurrentlyActive then
+        return false
+    end
+
+    local displayIcon = self:GetIcon(itemData)
+    if table.getn(self.activeSlots) > 1 and IsSkillActive(displayIcon) then
+        return false
+    end
+
+    if itemData.type ~= "MACRO" and itemData.type ~= "SUPER_MACRO" and not (self.spellCache and self.spellCache[itemData.name]) then
+        local location = self:FindItem(itemData.name)
+        if not location then
+            return false
+        end
+    end
+
+    if type(CleveRoids) == "table" and type(CleveRoids.GetCooldown) == "function" then
+        local lookupName = self:GetDisplayLookupName(itemData) or itemData.name
+        local cdExpiry = CleveRoids.GetCooldown(lookupName, true)
+        if cdExpiry and cdExpiry > GetTime() then
+            return false
+        end
+    end
+
+    local _, start, duration = self:GetActionData(itemData)
+    start = tonumber(start) or 0
+    duration = tonumber(duration) or 0
+
+    if start > 0 and duration > 1.5 then
+        local rem = (start + duration) - GetTime()
+        if rem > 0 then
+            return false
+        end
+    end
+
+    return true
+end
+
 function zPie:CloseRing()
     if not self.currentRing then return end
 
@@ -832,26 +882,41 @@ function zPie:CloseRing()
     local targetOriginalSlot = nil
 
     if (not self.hoveredSlice) and (elapsed <= self.TAP_THRESHOLD) then
-        local tapBehavior = zPieDB[ringIndex].tapBehavior or "FIRST"
+        local tapBehavior = (zPieDB and zPieDB[ringIndex] and zPieDB[ringIndex].tapBehavior) or "FIRST"
 
         if tapBehavior == "NEXT_AVAILABLE" then
-            -- Walk the active slots in order; use the first one not on cooldown
             local items = zPieDB[ringIndex].items
-            for _, slot in ipairs(self.activeSlots) do
-                local itemData = items and items[slot]
-                if itemData then
-                    local _, start, duration, _ = self:GetActionData(itemData)
-                    local onCD = start and duration and duration > 0 and
-                                 (start + duration) > GetTime()
-                    if not onCD then
+            local numActive = table.getn(self.activeSlots)
+
+            if numActive > 0 then
+                local activePos = nil
+                for i, slot in ipairs(self.activeSlots) do
+                    local itemData = items and items[slot]
+                    if itemData then
+                        local displayIcon = self:GetIcon(itemData)
+                        if IsSkillActive(displayIcon) then
+                            activePos = i
+                            break
+                        end
+                    end
+                end
+
+                local startPos = (activePos and numActive > 1) and ((activePos % numActive) + 1) or 1
+
+                for step = 0, numActive - 1 do
+                    local pos = ((startPos - 1 + step) % numActive) + 1
+                    local slot = self.activeSlots[pos]
+                    local itemData = items and items[slot]
+                    if itemData and self:IsItemAvailable(itemData, activePos == pos) then
                         targetOriginalSlot = slot
                         break
                     end
                 end
-            end
-            -- Everything on CD: fall back to the first slot
-            if not targetOriginalSlot and self.activeSlots[1] then
-                targetOriginalSlot = self.activeSlots[1]
+
+                -- Everything on CD / unavailable: fall back to the first slot
+                if not targetOriginalSlot and self.activeSlots[1] then
+                    targetOriginalSlot = self.activeSlots[1]
+                end
             end
         else
             -- FIRST (default): always use the first active slot

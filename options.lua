@@ -435,7 +435,7 @@ local function CaptureCursorToSlot(targetSlot)
             actionIcon = GetActionTexture(bufferSlot)
             
             if (not actionIcon or actionIcon == "") and actionName and zPie.spellCache[actionName] then
-                actionIcon = GetSpellTexture(zPie.spellCache[actionName], "BOOKTYPE_SPELL")
+                actionIcon = GetSpellTexture(zPie.spellCache[actionName], BOOKTYPE_SPELL or "spell")
             end
             
             actionType = "SPELL_OR_ITEM"
@@ -614,7 +614,7 @@ for s = 1, 8 do
                 
                 local spellId = zPie.spellCache and zPie.spellCache[itemData.name]
                 if spellId then
-                    GameTooltip:SetSpell(spellId, "BOOKTYPE_SPELL")
+                    GameTooltip:SetSpell(spellId, BOOKTYPE_SPELL or "spell")
                 else
                     local foundLink
                     for bag = 0, 4 do
