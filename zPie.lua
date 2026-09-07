@@ -63,6 +63,7 @@ function zPie:SanitizeDB()
         end
         if not zPieDB[i].items then zPieDB[i].items = {} end
         if not zPieDB[i].radius then zPieDB[i].radius = 75 end
+        if not zPieDB[i].tapBehavior then zPieDB[i].tapBehavior = "FIRST" end
     end
 end
 
@@ -98,7 +99,13 @@ function zPie:RefreshDBIcons()
                     elseif item.type == "MACRO" or item.type == "SUPER_MACRO" then
                         local idx = item.macroIndex or GetMacroIndexByName(item.name)
                         if idx and idx > 0 then
-                            local _, tex = GetMacroInfo(idx)
+                            local currentName, tex = GetMacroInfo(idx)
+                            if currentName and currentName ~= "" then
+                                -- Keep item.name in sync: if the macro was renamed externally, follow it
+                                if currentName ~= item.name then
+                                    item.name = currentName
+                                end
+                            end
                             if tex and tex ~= "" then
                                 item.icon = tex
                             end
@@ -825,7 +832,31 @@ function zPie:CloseRing()
     local targetOriginalSlot = nil
 
     if (not self.hoveredSlice) and (elapsed <= self.TAP_THRESHOLD) then
-        if self.activeSlots[1] then targetOriginalSlot = self.activeSlots[1] end
+        local tapBehavior = zPieDB[ringIndex].tapBehavior or "FIRST"
+
+        if tapBehavior == "NEXT_AVAILABLE" then
+            -- Walk the active slots in order; use the first one not on cooldown
+            local items = zPieDB[ringIndex].items
+            for _, slot in ipairs(self.activeSlots) do
+                local itemData = items and items[slot]
+                if itemData then
+                    local _, start, duration, _ = self:GetActionData(itemData)
+                    local onCD = start and duration and duration > 0 and
+                                 (start + duration) > GetTime()
+                    if not onCD then
+                        targetOriginalSlot = slot
+                        break
+                    end
+                end
+            end
+            -- Everything on CD: fall back to the first slot
+            if not targetOriginalSlot and self.activeSlots[1] then
+                targetOriginalSlot = self.activeSlots[1]
+            end
+        else
+            -- FIRST (default): always use the first active slot
+            if self.activeSlots[1] then targetOriginalSlot = self.activeSlots[1] end
+        end
     elseif self.hoveredSlice then
         targetOriginalSlot = self.activeSlots[self.hoveredSlice]
     end

@@ -323,9 +323,61 @@ bindBtn:SetScript("OnClick", function()
     zPieConfigFrame:Refresh()
 end)
 
+-- ==========================================
+-- PER-RING TAP BEHAVIOR DROPDOWN
+-- ==========================================
+local lblTap = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+lblTap:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -221)
+lblTap:SetText("Tap:")
+lblTap:SetTextColor(0.8, 0.8, 0.8)
+
+local ddTap = CreateFrame("Frame", "zPieTapDropdown", f, "UIDropDownMenuTemplate")
+ddTap:SetPoint("TOPLEFT", f, "TOPLEFT", 50, -215)
+
+local tL = getglobal(ddTap:GetName().."Left")
+local tM = getglobal(ddTap:GetName().."Middle")
+local tR = getglobal(ddTap:GetName().."Right")
+if tL then tL:Hide() end
+if tM then tM:Hide() end
+if tR then tR:Hide() end
+
+local tBg = CreateFrame("Frame", nil, ddTap)
+tBg:SetPoint("TOPLEFT", ddTap, "TOPLEFT", 16, -2)
+tBg:SetPoint("BOTTOMRIGHT", ddTap, "BOTTOMRIGHT", -16, 6)
+tBg:SetBackdrop(flatBackdrop)
+tBg:SetBackdropColor(0.15, 0.15, 0.15, 1)
+tBg:SetBackdropBorderColor(0, 0, 0, 1)
+tBg:SetFrameLevel(ddTap:GetFrameLevel() - 1)
+
+local tapOptions = {
+    { text = "First",          value = "FIRST" },
+    { text = "Next Available", value = "NEXT_AVAILABLE" },
+}
+
+local function OnTapSelect()
+    UIDropDownMenu_SetSelectedID(ddTap, this:GetID())
+    if zPieDB and zPieDB[selectedRing] then
+        zPieDB[selectedRing].tapBehavior = this.value
+    end
+    UIDropDownMenu_SetText(this:GetText(), ddTap)
+end
+
+UIDropDownMenu_Initialize(ddTap, function()
+    local current = (zPieDB and zPieDB[selectedRing] and zPieDB[selectedRing].tapBehavior) or "FIRST"
+    for _, opt in ipairs(tapOptions) do
+        local info = {}
+        info.text  = opt.text
+        info.value = opt.value
+        info.func  = OnTapSelect
+        info.checked = (current == opt.value)
+        UIDropDownMenu_AddButton(info)
+    end
+end)
+UIDropDownMenu_SetWidth(110, ddTap)
+
 local radiusSlider = CreateFrame("Slider", "zPieRadiusSlider", f, "OptionsSliderTemplate")
 radiusSlider:SetWidth(150)
-radiusSlider:SetPoint("TOP", f, "TOP", 0, -230)
+radiusSlider:SetPoint("TOP", f, "TOP", 0, -260)
 radiusSlider:SetMinMaxValues(40, 150)
 radiusSlider:SetValueStep(1)
 getglobal(radiusSlider:GetName() .. "Low"):SetText("40")
@@ -665,7 +717,17 @@ function zPieConfigFrame:Refresh()
     end
 
     namesBtn.text:SetText(zPieDB.showSelectionNames and "Names: On" or "Names: Off")
-    
+
+    -- Sync tap behavior dropdown to the selected ring
+    local currentTap = (data and data.tapBehavior) or "FIRST"
+    for i, opt in ipairs(tapOptions) do
+        if opt.value == currentTap then
+            UIDropDownMenu_SetSelectedID(ddTap, i)
+            UIDropDownMenu_SetText(opt.text, ddTap)
+            break
+        end
+    end
+
     -- Apply tab labels with truncation to match user inputs
     for i = 1, 10 do
         local rName = (zPieDB[i] and zPieDB[i].name) or ("Ring "..i)
