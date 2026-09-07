@@ -68,7 +68,6 @@ function zPie:SanitizeDB()
 end
 
 function zPie:CacheSpells()
-    self.spellCache = self.spellCache or {}
     local tempCache = {}
     local i = 1
     local count = 0
@@ -83,95 +82,6 @@ function zPie:CacheSpells()
     if count > 0 then
         self.spellCache = tempCache
     end
-end
-
-function zPie:IsSpell(name)
-    if not name or name == "" then return false end
-    if self.spellCache and self.spellCache[name] then
-        return true
-    end
-    if type(zAPI) == "function" then
-        local id = zAPI("spellId", name)
-        if id and id > 0 then
-            return true
-        end
-    end
-    if type(CleveRoids) == "table" and type(CleveRoids.GetSpell) == "function" then
-        local spell = CleveRoids.GetSpell(name)
-        if spell then return true end
-    end
-    if not self.spellCache or next(self.spellCache) == nil then
-        self:CacheSpells()
-        if self.spellCache and self.spellCache[name] then
-            return true
-        end
-    end
-    return false
-end
-
-function zPie:GetItemLink(itemName)
-    if not itemName then return nil end
-    for invSlot = 0, 19 do
-        local link = GetInventoryItemLink("player", invSlot)
-        if self:ItemLinkMatches(link, itemName) then return link end
-    end
-    for bag = 0, 4 do
-        for slot = 1, GetContainerNumSlots(bag) do
-            local link = GetContainerItemLink(bag, slot)
-            if self:ItemLinkMatches(link, itemName) then return link end
-        end
-    end
-    return nil
-end
-
-function zPie:GetCooldown(itemData)
-    if not itemData or not itemData.name or itemData.name == "" then
-        return 0, 0, 0
-    end
-
-    local lookupName = self:GetDisplayLookupName(itemData) or itemData.name
-
-    -- 1. Native zAPI cooldown inspection (exact CooldownMgr list, GCD separated)
-    if type(zAPI) == "function" then
-        local queryTarget = lookupName
-        if not self:IsSpell(lookupName) then
-            local itemLink = self:GetItemLink(lookupName)
-            if itemLink then queryTarget = itemLink end
-        end
-
-        local rem, dur, startSec, gcdRem = zAPI("cooldown", queryTarget)
-        if rem ~= nil and dur ~= nil then
-            if rem > 0 then
-                return rem, dur, startSec
-            end
-            -- If native says 0 and it was a resolved spell or item link, it is definitively ready
-            if self:IsSpell(lookupName) or queryTarget ~= lookupName then
-                return 0, 0, 0
-            end
-        end
-    end
-
-    -- 2. CleveRoids fallback
-    if type(CleveRoids) == "table" and type(CleveRoids.GetCooldown) == "function" then
-        local cdExpiry, cdDuration = CleveRoids.GetCooldown(lookupName, true)
-        if cdExpiry and cdExpiry > GetTime() then
-            local rem = cdExpiry - GetTime()
-            return rem, cdDuration or rem, (cdExpiry - (cdDuration or rem))
-        end
-    end
-
-    -- 3. Standard Lua API fallback with duration > 1.5s GCD filter
-    local _, start, duration = self:GetActionData(itemData)
-    start = tonumber(start) or 0
-    duration = tonumber(duration) or 0
-    if start > 0 and duration > 1.5 then
-        local rem = (start + duration) - GetTime()
-        if rem > 0 then
-            return rem, duration, start
-        end
-    end
-
-    return 0, 0, 0
 end
 
 function zPie:RefreshDBIcons()
@@ -222,28 +132,20 @@ function zPie:GetBufferSlot()
     return 120
 end
 
-local function NormalizeTexture(path)
-    if not path or path == "" then return "" end
-    path = string.lower(path)
-    path = string.gsub(path, "/", "\\")
-    return path
-end
-
 local function IsSkillActive(iconTexture)
     if not iconTexture or iconTexture == "" then return false end
-    local normTarget = NormalizeTexture(iconTexture)
     
     local numForms = GetNumShapeshiftForms()
     if numForms and numForms > 0 then
         for i = 1, numForms do
             local icon, _, isActive = GetShapeshiftFormInfo(i)
-            if isActive and NormalizeTexture(icon) == normTarget then return true end
+            if isActive and icon == iconTexture then return true end
         end
     end
 
     if type(GetTrackingTexture) == "function" then
         local trackTex = GetTrackingTexture()
-        if trackTex and trackTex ~= "" and NormalizeTexture(trackTex) == normTarget then
+        if trackTex and trackTex ~= "" and trackTex == iconTexture then
             return true
         end
     end
@@ -251,7 +153,7 @@ local function IsSkillActive(iconTexture)
     for i = 1, 32 do
         local buffIcon = UnitBuff("player", i)
         if not buffIcon then break end
-        if NormalizeTexture(buffIcon) == normTarget then return true end
+        if buffIcon == iconTexture then return true end
     end
     
     return false
@@ -557,7 +459,7 @@ function zPie:GetActionData(itemData)
     local lookupName = self:GetDisplayLookupName(itemData)
     if not lookupName then return count, start, duration, enable end
 
-    if self.spellCache and self.spellCache[lookupName] then
+    if self.spellCache[lookupName] then
         start, duration, enable = GetSpellCooldown(self.spellCache[lookupName], BOOKTYPE_SPELL or "spell")
         return count, start, duration, enable
     end
@@ -765,19 +667,14 @@ function zPie:ExecuteAction(itemData)
     if itemData.type == "MACRO" or itemData.type == "SUPER_MACRO" then
         self:ExecuteMacro(itemData)
     else
-        if self:IsSpell(itemData.name) then
+        if self.spellCache[itemData.name] then
             CastSpellByName(itemData.name)
             return
         end
 
         local location, first, second = self:FindItem(itemData.name)
-        if location then
-            self:UseItem(itemData, location, first, second)
-            return
-        end
-
-        -- Fallback: cast by name in case it is a spell not yet in cache
-        CastSpellByName(itemData.name)
+        if not location then return end
+        self:UseItem(itemData, location, first, second)
     end
 end
 
@@ -921,21 +818,6 @@ function zPie:OpenRing(ringIndex)
         
         local count, start, duration, enable = self:GetActionData(itemData)
         btn.count:SetText(count)
-
-        if type(zAPI) == "function" then
-            local rem, dur, startSec = self:GetCooldown(itemData)
-            if rem and rem > 0 and dur and dur > 0 then
-                start = startSec
-                duration = dur
-                enable = 1
-            elseif rem == 0 then
-                if duration and duration <= 1.5 then
-                    start = 0
-                    duration = 0
-                end
-            end
-        end
-
         if start and duration and duration > 0 then
             CooldownFrame_SetTimer(btn.cd, start, duration, enable)
             btn.cd:Show()
@@ -954,30 +836,39 @@ function zPie:IsItemAvailable(itemData, isCurrentlyActive)
         return false 
     end
 
-    local numActive = table.getn(self.activeSlots)
-
-    -- If currently active (stance/aspect/tracking/buff) and multiple slots exist, skip to rotate
-    if isCurrentlyActive and numActive > 1 then
+    if isCurrentlyActive then
         return false
     end
 
     local displayIcon = self:GetIcon(itemData)
-    if numActive > 1 and IsSkillActive(displayIcon) then
+    if table.getn(self.activeSlots) > 1 and IsSkillActive(displayIcon) then
         return false
     end
 
-    -- If not a macro and not a spell, verify the player has the item in bags or equipped
-    if itemData.type ~= "MACRO" and itemData.type ~= "SUPER_MACRO" and not self:IsSpell(itemData.name) then
+    if itemData.type ~= "MACRO" and itemData.type ~= "SUPER_MACRO" and not (self.spellCache and self.spellCache[itemData.name]) then
         local location = self:FindItem(itemData.name)
         if not location then
             return false
         end
     end
 
-    -- Check cooldown: if remaining cooldown > 0, it is NOT available
-    local rem = self:GetCooldown(itemData)
-    if rem and rem > 0 then
-        return false
+    if type(CleveRoids) == "table" and type(CleveRoids.GetCooldown) == "function" then
+        local lookupName = self:GetDisplayLookupName(itemData) or itemData.name
+        local cdExpiry = CleveRoids.GetCooldown(lookupName, true)
+        if cdExpiry and cdExpiry > GetTime() then
+            return false
+        end
+    end
+
+    local _, start, duration = self:GetActionData(itemData)
+    start = tonumber(start) or 0
+    duration = tonumber(duration) or 0
+
+    if start > 0 and duration > 1.5 then
+        local rem = (start + duration) - GetTime()
+        if rem > 0 then
+            return false
+        end
     end
 
     return true
@@ -1139,10 +1030,7 @@ zPie.updateDriver:SetScript("OnUpdate", function()
 end)
 
 zPie:RegisterEvent("VARIABLES_LOADED")
-zPie:RegisterEvent("PLAYER_ENTERING_WORLD")
 zPie:RegisterEvent("SPELLS_CHANGED")
-zPie:RegisterEvent("LEARNED_SPELL_IN_TAB")
-zPie:RegisterEvent("UPDATE_MACROS")
 zPie:SetScript("OnEvent", function()
     if event == "VARIABLES_LOADED" then
         zPie:MigrateLegacyBindings()
@@ -1177,17 +1065,11 @@ zPie:SetScript("OnEvent", function()
                 this:SetScript("OnUpdate", nil)
             end
         end)
-    elseif event == "PLAYER_ENTERING_WORLD" then
-        zPie:CacheSpells()
-        zPie:RefreshDBIcons()
-    elseif event == "SPELLS_CHANGED" or event == "LEARNED_SPELL_IN_TAB" then
-        zPie:CacheSpells()
-        zPie:RefreshDBIcons()
-    elseif event == "UPDATE_MACROS" then
-        zPie:RefreshDBIcons()
     elseif event == "KEY_UP" then
         if zPie.currentRing and zPie.reqKeyCode and arg1 == zPie.reqKeyCode then
             zPie:CloseRing()
         end
+    elseif event == "SPELLS_CHANGED" then
+        zPie:CacheSpells()
     end
 end)
