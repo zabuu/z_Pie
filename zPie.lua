@@ -8,6 +8,17 @@ zPie.centerX = 0
 zPie.centerY = 0
 zPie.BTN_SIZE = 40
 zPie.DEADZONE = 18
+zPie.RAID_MARKER_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
+zPie.RAID_MARKERS = {
+    { name = "Skull",    markerIndex = 8 },
+    { name = "Cross",    markerIndex = 7 },
+    { name = "Square",   markerIndex = 6 },
+    { name = "Moon",     markerIndex = 5 },
+    { name = "Triangle", markerIndex = 4 },
+    { name = "Diamond",  markerIndex = 3 },
+    { name = "Circle",   markerIndex = 2 },
+    { name = "Star",     markerIndex = 1 },
+}
 
 zPie.TAP_THRESHOLD = 0.20
 zPie.openTime = 0
@@ -52,18 +63,112 @@ function zPie:MigrateLegacyBindings()
     end
 end
 
+function zPie:CreateRingData(index, name, items)
+    return {
+        name = name or ("Ring " .. index),
+        anchor = "MOUSE",
+        items = items or {},
+        radius = 75,
+        tapBehavior = "FIRST",
+    }
+end
+
+function zPie:CreateRaidMarkerItems()
+    local items = {}
+    for i, marker in ipairs(self.RAID_MARKERS) do
+        items[i] = {
+            name = marker.name,
+            icon = self.RAID_MARKER_TEXTURE,
+            type = "RAID_MARKER",
+            markerIndex = marker.markerIndex,
+        }
+    end
+    return items
+end
+
+function zPie:GetRingCount()
+    if not zPieDB then return 10 end
+    return math.max(10, tonumber(zPieDB.ringCount) or 10)
+end
+
+function zPie:CreateRing(name, items)
+    if not zPieDB then self:SanitizeDB() end
+    local index = self:GetRingCount() + 1
+    zPieDB[index] = self:CreateRingData(index, name, items)
+    zPieDB.ringCount = index
+
+    if self.selectionTooltip then
+        self:InitButtons(index, index)
+    end
+    return index
+end
+
 function zPie:SanitizeDB()
     if not zPieDB then zPieDB = {} end
     if not zPieDB.arrowStyle then zPieDB.arrowStyle = "Interface\\Minimap\\MinimapArrow" end
     if not zPieDB.arrowBehavior then zPieDB.arrowBehavior = "SMOOTH" end
     if zPieDB.showSelectionNames == nil then zPieDB.showSelectionNames = true end
-    for i = 1, 10 do
+
+    local ringCount = tonumber(zPieDB.ringCount) or 10
+    for key in pairs(zPieDB) do
+        if type(key) == "number" and key > ringCount then ringCount = key end
+    end
+    ringCount = math.max(10, math.floor(ringCount))
+    zPieDB.ringCount = ringCount
+
+    for i = 1, ringCount do
         if not zPieDB[i] then
-            zPieDB[i] = { name = "Ring " .. i, anchor = "MOUSE", items = {}, radius = 75 }
+            zPieDB[i] = self:CreateRingData(i)
         end
         if not zPieDB[i].items then zPieDB[i].items = {} end
         if not zPieDB[i].radius then zPieDB[i].radius = 75 end
         if not zPieDB[i].tapBehavior then zPieDB[i].tapBehavior = "FIRST" end
+    end
+
+    -- Version 1 briefly placed this default in an empty original ring. Move it
+    -- out to its own appended ring if that build was loaded before this one.
+    local markerRingVersion = tonumber(zPieDB.raidMarkerRingVersion) or 0
+    if markerRingVersion < 2 then
+        local markerItems = nil
+        if markerRingVersion == 1 then
+            for i = 1, ringCount do
+                local ring = zPieDB[i]
+                if ring and ring.name == "Raid Marks" and ring.items and
+                   ring.items[1] and ring.items[1].type == "RAID_MARKER" then
+                    markerItems = ring.items
+                    zPieDB[i] = self:CreateRingData(i)
+                    break
+                end
+            end
+        end
+
+        ringCount = ringCount + 1
+        zPieDB[ringCount] = self:CreateRingData(
+            ringCount, "Raid Marks", markerItems or self:CreateRaidMarkerItems())
+        zPieDB.ringCount = ringCount
+        zPieDB.raidMarkerRingIndex = ringCount
+        zPieDB.raidMarkerRingVersion = 2
+    end
+
+    -- Version 3 places Skull at twelve o'clock and proceeds clockwise in
+    -- reverse marker order: Cross, Square, Moon, Triangle, Diamond, Circle, Star.
+    if markerRingVersion < 3 then
+        local markerRingIndex = tonumber(zPieDB.raidMarkerRingIndex)
+        if not markerRingIndex or not zPieDB[markerRingIndex] then
+            for i = 1, zPieDB.ringCount do
+                local ring = zPieDB[i]
+                if ring and ring.name == "Raid Marks" then
+                    markerRingIndex = i
+                    break
+                end
+            end
+        end
+
+        if markerRingIndex and zPieDB[markerRingIndex] then
+            zPieDB[markerRingIndex].items = self:CreateRaidMarkerItems()
+            zPieDB.raidMarkerRingIndex = markerRingIndex
+        end
+        zPieDB.raidMarkerRingVersion = 3
     end
 end
 
@@ -86,7 +191,7 @@ end
 
 function zPie:RefreshDBIcons()
     if not zPieDB then return end
-    for r = 1, 10 do
+    for r = 1, self:GetRingCount() do
         if zPieDB[r] and zPieDB[r].items then
             for s = 1, 8 do
                 local item = zPieDB[r].items[s]
@@ -177,7 +282,8 @@ local function SetRotatedTexCoords(tex, angle)
     tex:SetTexCoord(ULx, ULy, LLx, LLy, URx, URy, LRx, LRy)
 end
 
-function zPie:InitButtons()
+function zPie:InitButtons(firstRing, lastRing)
+    if not self.selectionTooltip then
     self.selectionTooltip = CreateFrame("Frame", "zPieSelectionTooltip", UIParent)
     self.selectionTooltip:SetHeight(18)
     self.selectionTooltip:SetFrameStrata("TOOLTIP")
@@ -207,8 +313,12 @@ function zPie:InitButtons()
         tex:Hide()
         self.compassFrame.arrows[i] = tex
     end
+    end
 
-    for r = 1, 10 do
+    firstRing = firstRing or 1
+    lastRing = lastRing or self:GetRingCount()
+    for r = firstRing, lastRing do
+        if not self.rings[r] then
         self.rings[r] = {}
         for s = 1, 8 do
             local name = "zPieRing" .. r .. "Slot" .. s
@@ -296,17 +406,18 @@ function zPie:InitButtons()
 
             self.rings[r][s] = btn
         end
+        end
     end
 end
 
 function zPie:HideAll()
-    for r = 1, 10 do
+    for r, ringButtons in pairs(self.rings) do
         for s = 1, 8 do
-            self.rings[r][s]:Hide()
-            self.rings[r][s].hl:Hide()
-            self.rings[r][s].activeTex:Hide()
-            self.rings[r][s].arrow:Hide()
-            for _, outlineTexture in ipairs(self.rings[r][s].equippedOutline) do
+            ringButtons[s]:Hide()
+            ringButtons[s].hl:Hide()
+            ringButtons[s].activeTex:Hide()
+            ringButtons[s].arrow:Hide()
+            for _, outlineTexture in ipairs(ringButtons[s].equippedOutline) do
                 outlineTexture:Hide()
             end
         end
@@ -427,6 +538,10 @@ end
 function zPie:GetIcon(itemData)
     if not itemData or not itemData.name then return "Interface\\Icons\\INV_Misc_QuestionMark" end
 
+    if itemData.type == "RAID_MARKER" then
+        return itemData.icon or self.RAID_MARKER_TEXTURE
+    end
+
     local lookupName = self:GetDisplayLookupName(itemData)
     local resolvedTexture = self:GetResolvedTexture(lookupName)
     if resolvedTexture then return resolvedTexture end
@@ -452,9 +567,31 @@ function zPie:GetIcon(itemData)
     return "Interface\\Icons\\INV_Misc_QuestionMark"
 end
 
+function zPie:SetIconTexture(texture, itemData, inset)
+    if not texture then return end
+
+    texture:SetTexture(self:GetIcon(itemData))
+    if itemData and itemData.type == "RAID_MARKER" and itemData.markerIndex then
+        local markerIndex = tonumber(itemData.markerIndex) or 1
+        if type(SetRaidTargetIconTexture) == "function" then
+            SetRaidTargetIconTexture(texture, markerIndex)
+        else
+            local zeroIndex = markerIndex - 1
+            local column = zeroIndex - (math.floor(zeroIndex / 4) * 4)
+            local top = math.floor(zeroIndex / 4) * 0.25
+            local left = column * 0.25
+            texture:SetTexCoord(left, left + 0.25, top, top + 0.25)
+        end
+    else
+        local crop = inset or 0
+        texture:SetTexCoord(crop, 1 - crop, crop, 1 - crop)
+    end
+end
+
 function zPie:GetActionData(itemData)
     local count, start, duration, enable = "", 0, 0, 0
     if not itemData or not itemData.name then return count, start, duration, enable end
+    if itemData.type == "RAID_MARKER" then return count, start, duration, enable end
 
     local lookupName = self:GetDisplayLookupName(itemData)
     if not lookupName then return count, start, duration, enable end
@@ -661,10 +798,121 @@ function zPie:UseItem(itemData, location, first, second)
     return true
 end
 
+function zPie:TargetRaidMarker(markerIndex)
+    if type(TargetUnit) ~= "function" then return false end
+
+    -- SuperWoW/Nampower exposes each marked unit directly as mark1-mark8.
+    local markUnit = "mark" .. markerIndex
+    if UnitExists(markUnit) then
+        TargetUnit(markUnit)
+        if UnitExists("target") then return true end
+    end
+
+    if type(GetRaidTargetIndex) ~= "function" then return false end
+
+    local function TryUnit(unit)
+        if UnitExists(unit) and GetRaidTargetIndex(unit) == markerIndex then
+            TargetUnit(unit)
+            return true
+        end
+        return false
+    end
+
+    if TryUnit("mouseover") or TryUnit("focus") or TryUnit("targettarget") or
+       TryUnit("pettarget") then
+        return true
+    end
+
+    for i = 1, 4 do
+        if TryUnit("party" .. i) or TryUnit("party" .. i .. "target") then
+            return true
+        end
+    end
+
+    for i = 1, 40 do
+        if TryUnit("raid" .. i) or TryUnit("raid" .. i .. "target") or
+           TryUnit("nameplate" .. i) then
+            return true
+        end
+    end
+
+    return false
+end
+
+function zPie:CanSetRaidMarker()
+    local raidMembers = type(GetNumRaidMembers) == "function" and GetNumRaidMembers() or 0
+    if raidMembers > 0 then
+        local isLeader = type(IsRaidLeader) == "function" and IsRaidLeader()
+        local isOfficer = type(IsRaidOfficer) == "function" and IsRaidOfficer()
+        return (isLeader or isOfficer) and true or false
+    end
+
+    local partyMembers = type(GetNumPartyMembers) == "function" and GetNumPartyMembers() or 0
+    if partyMembers > 0 then
+        if type(UnitIsPartyLeader) == "function" then
+            return UnitIsPartyLeader("player") and true or false
+        elseif type(IsPartyLeader) == "function" then
+            return IsPartyLeader() and true or false
+        end
+        return false
+    end
+
+    return true
+end
+
+function zPie:ShowRaidMarkerTargetError()
+    if UIErrorsFrame then
+        UIErrorsFrame:AddMessage("No unit has that raid marker.", 1.0, 0.1, 0.1, 1.0)
+    end
+end
+
+function zPie:ApplyRaidMarker(itemData)
+    local markerIndex = itemData and tonumber(itemData.markerIndex)
+    if not markerIndex or markerIndex < 1 or markerIndex > 8 then return false end
+
+    -- Without marking permission, every marker slice acts as target-by-marker,
+    -- even when the player currently has some other unit targeted.
+    if not UnitExists("target") or not self:CanSetRaidMarker() then
+        if self:TargetRaidMarker(markerIndex) then return true end
+        self:ShowRaidMarkerTargetError()
+        return false
+    end
+
+    if type(SetRaidTarget) ~= "function" then
+        if UIErrorsFrame then
+            UIErrorsFrame:AddMessage("Raid markers are unavailable.", 1.0, 0.1, 0.1, 1.0)
+        end
+        return false
+    end
+
+    local currentMarker = nil
+    if type(GetRaidTargetIndex) == "function" then
+        currentMarker = GetRaidTargetIndex("target")
+    end
+
+    local newMarker = markerIndex
+    if currentMarker == markerIndex then newMarker = 0 end
+    SetRaidTarget("target", newMarker)
+
+    -- Permission can also be denied by server-side rules we cannot predict.
+    -- If the marker did not change, retain useful behavior by targeting it.
+    if type(GetRaidTargetIndex) == "function" then
+        local appliedMarker = GetRaidTargetIndex("target") or 0
+        if appliedMarker ~= newMarker then
+            if self:TargetRaidMarker(markerIndex) then return true end
+            self:ShowRaidMarkerTargetError()
+            return false
+        end
+    end
+    return true
+end
+
 function zPie:ExecuteAction(itemData)
     if not itemData or not itemData.name then return end
-    
-    if itemData.type == "MACRO" or itemData.type == "SUPER_MACRO" then
+
+    if itemData.type == "RAID_MARKER" then
+        self:ApplyRaidMarker(itemData)
+    elseif itemData.type == "MACRO" or itemData.type == "SUPER_MACRO" then
         self:ExecuteMacro(itemData)
     else
         if self.spellCache[itemData.name] then
@@ -697,14 +945,33 @@ function zPie:GetBindingKeyCode(binding)
     end
 end
 
+function zPie:GetRingBinding(ringIndex)
+    local binding = GetBindingKey("ZPIE_RING_" .. ringIndex)
+    if binding then return binding end
+
+    local ring = zPieDB and zPieDB[ringIndex]
+    return ring and ring.binding or nil
+end
+
+function zPie:BindingMatchesKeyEvent(binding, keyCode, metaState)
+    if not binding or self:GetBindingKeyCode(binding) ~= keyCode then return false end
+
+    local expectedMeta = 0
+    if string.find(binding, "SHIFT%-") then expectedMeta = expectedMeta + 1 end
+    if string.find(binding, "CTRL%-") then expectedMeta = expectedMeta + 2 end
+    if string.find(binding, "ALT%-") then expectedMeta = expectedMeta + 4 end
+    return expectedMeta == (tonumber(metaState) or 0)
+end
+
 function zPie:OpenRing(ringIndex)
     ringIndex = tonumber(ringIndex)
     if not ringIndex or not zPieDB or not zPieDB[ringIndex] then return end
+    if not self.rings[ringIndex] then self:InitButtons(ringIndex, ringIndex) end
 
     self.openTime = GetTime()
     self.activeSlots = {}
 
-    local bindStr = GetBindingKey("ZPIE_RING_" .. ringIndex)
+    local bindStr = self:GetRingBinding(ringIndex)
     if bindStr then
         self.reqAlt = string.find(bindStr, "ALT%-") and true or false
         self.reqCtrl = string.find(bindStr, "CTRL%-") and true or false
@@ -797,7 +1064,7 @@ function zPie:OpenRing(ringIndex)
         end
         
         local displayIcon = self:GetIcon(itemData)
-        btn.icon:SetTexture(displayIcon)
+        self:SetIconTexture(btn.icon, itemData, 0)
 
         local isEquipped = self:IsItemEquipped(itemData)
         for _, outlineTexture in ipairs(btn.equippedOutline) do
@@ -838,6 +1105,10 @@ function zPie:IsItemAvailable(itemData, isCurrentlyActive)
 
     if isCurrentlyActive then
         return false
+    end
+
+    if itemData.type == "RAID_MARKER" then
+        return UnitExists("target") and true or false
     end
 
     local displayIcon = self:GetIcon(itemData)
@@ -1041,6 +1312,7 @@ zPie:SetScript("OnEvent", function()
         if CleveRoids and CleveRoids.NampowerAPI and
            CleveRoids.NampowerAPI.features and
            CleveRoids.NampowerAPI.features.hasKeyEvents then
+            zPie:RegisterEvent("KEY_DOWN")
             zPie:RegisterEvent("KEY_UP")
         end
         
@@ -1065,6 +1337,18 @@ zPie:SetScript("OnEvent", function()
                 this:SetScript("OnUpdate", nil)
             end
         end)
+    elseif event == "KEY_DOWN" then
+        local keyboardFocus = type(GetCurrentKeyBoardFocus) == "function" and GetCurrentKeyBoardFocus()
+        local configOpen = zPieConfigFrame and zPieConfigFrame:IsShown()
+        if not keyboardFocus and not configOpen and not zPie.currentRing then
+            for i = 11, zPie:GetRingCount() do
+                local binding = zPieDB[i] and zPieDB[i].binding
+                if zPie:BindingMatchesKeyEvent(binding, arg1, arg2) then
+                    zPie:OpenRing(i)
+                    break
+                end
+            end
+        end
     elseif event == "KEY_UP" then
         if zPie.currentRing and zPie.reqKeyCode and arg1 == zPie.reqKeyCode then
             zPie:CloseRing()

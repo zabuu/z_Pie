@@ -26,7 +26,7 @@ title:SetText(zPie.TITLE)
 
 local footer = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 footer:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 10)
-footer:SetText(zPie.TITLE .. " v1.1.0 - Made by Zab - Aug 29, 2026")
+footer:SetText(zPie.TITLE .. " v1.2.0 - Made by Zab - Sep 12, 2026")
 
 local function CreateFlatButton(name, parent, width, height, text)
     local btn = CreateFrame("Button", name, parent)
@@ -54,6 +54,7 @@ closeBtn.text:SetTextColor(1, 0.3, 0.3)
 closeBtn:SetScript("OnClick", function() f:Hide() end)
 
 local selectedRing = 1
+local ringPage = 1
 local listeningForBind = false
 
 -- ==========================================
@@ -194,15 +195,47 @@ for i = 1, 10 do
         btn:SetPoint("TOPLEFT", f, "TOPLEFT", 18 + ((i-6) * 78), -141)
     end
     
-    btn.tabIndex = i
+    btn.ringIndex = i
     btn:SetScript("OnClick", function()
-        selectedRing = this.tabIndex
+        selectedRing = this.ringIndex
         listeningForBind = false
         zPieKeyInterceptor:Hide()
         zPieConfigFrame:Refresh()
     end)
     ringTabs[i] = btn
 end
+
+local prevPageBtn = CreateFlatButton("zPiePrevRingPageBtn", f, 22, 18, "<")
+prevPageBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -92, -92)
+prevPageBtn:SetScript("OnClick", function()
+    if ringPage > 1 then
+        ringPage = ringPage - 1
+        selectedRing = ((ringPage - 1) * 10) + 1
+        zPieConfigFrame:Refresh()
+    end
+end)
+
+local nextPageBtn = CreateFlatButton("zPieNextRingPageBtn", f, 22, 18, ">")
+nextPageBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -66, -92)
+nextPageBtn:SetScript("OnClick", function()
+    local maxPage = math.ceil(zPie:GetRingCount() / 10)
+    if ringPage < maxPage then
+        ringPage = ringPage + 1
+        selectedRing = ((ringPage - 1) * 10) + 1
+        zPieConfigFrame:Refresh()
+    end
+end)
+
+local ringPageText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+ringPageText:SetPoint("RIGHT", prevPageBtn, "LEFT", -5, 0)
+
+local addRingBtn = CreateFlatButton("zPieAddRingBtn", f, 52, 18, "+ Ring")
+addRingBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -10, -92)
+addRingBtn:SetScript("OnClick", function()
+    selectedRing = zPie:CreateRing()
+    ringPage = math.floor((selectedRing - 1) / 10) + 1
+    zPieConfigFrame:Refresh()
+end)
 
 local function CreateEditBox(name, parent, width, labelText)
     local label = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -245,7 +278,12 @@ ebName:SetScript("OnTextChanged", function()
         -- Live-update the corresponding tab text, truncating to 10 chars so it fits nicely
         local rName = txt == "" and ("Ring "..selectedRing) or txt
         local shortName = string.len(rName) > 10 and string.sub(rName, 1, 9).."." or rName
-        ringTabs[selectedRing].text:SetText(shortName)
+        for _, tab in ipairs(ringTabs) do
+            if tab.ringIndex == selectedRing then
+                tab.text:SetText(shortName)
+                break
+            end
+        end
     end
 end)
 
@@ -277,7 +315,52 @@ local function ApplyBinding(key)
        key == "LCTRL" or key == "RCTRL" or key == "CTRL" or 
        key == "LALT" or key == "RALT" or key == "ALT" then return end
 
-    if key == "ESCAPE" then
+    if selectedRing > 10 and string.find(key, "BUTTON") then
+        listeningForBind = false
+        keyInterceptor:Hide()
+        UIErrorsFrame:AddMessage("Extra rings use keyboard hotkeys only.", 1.0, 0.1, 0.1, 1.0)
+        zPieConfigFrame:Refresh()
+        return
+    end
+
+    if selectedRing > 10 then
+        if key == "ESCAPE" then
+            zPieDB[selectedRing].binding = nil
+        else
+            local hasKeyEvents = CleveRoids and CleveRoids.NampowerAPI and
+                CleveRoids.NampowerAPI.features and
+                CleveRoids.NampowerAPI.features.hasKeyEvents
+            if not hasKeyEvents then
+                listeningForBind = false
+                keyInterceptor:Hide()
+                UIErrorsFrame:AddMessage("Extra-ring hotkeys require Nampower key events.", 1.0, 0.1, 0.1, 1.0)
+                zPieConfigFrame:Refresh()
+                return
+            end
+
+            local alt = IsAltKeyDown() and "ALT-" or ""
+            local ctrl = IsControlKeyDown() and "CTRL-" or ""
+            local shift = IsShiftKeyDown() and "SHIFT-" or ""
+            local fullBinding = alt .. ctrl .. shift .. key
+
+            if not zPie:GetBindingKeyCode(fullBinding) then
+                listeningForBind = false
+                keyInterceptor:Hide()
+                UIErrorsFrame:AddMessage("That key is unsupported for extra rings.", 1.0, 0.1, 0.1, 1.0)
+                zPieConfigFrame:Refresh()
+                return
+            end
+
+            for i = 11, zPie:GetRingCount() do
+                if i ~= selectedRing and zPieDB[i] and zPieDB[i].binding == fullBinding then
+                    zPieDB[i].binding = nil
+                end
+            end
+            SetBinding(fullBinding, nil)
+            SaveBindings(GetCurrentBindingSet())
+            zPieDB[selectedRing].binding = fullBinding
+        end
+    elseif key == "ESCAPE" then
         local key1, key2 = GetBindingKey("ZPIE_RING_" .. selectedRing)
         if key1 then SetBinding(key1, nil) end
         if key2 then SetBinding(key2, nil) end
@@ -287,6 +370,11 @@ local function ApplyBinding(key)
         local ctrl = IsControlKeyDown() and "CTRL-" or ""
         local shift = IsShiftKeyDown() and "SHIFT-" or ""
         local fullBinding = alt .. ctrl .. shift .. key
+        for i = 11, zPie:GetRingCount() do
+            if zPieDB[i] and zPieDB[i].binding == fullBinding then
+                zPieDB[i].binding = nil
+            end
+        end
         local key1, key2 = GetBindingKey("ZPIE_RING_" .. selectedRing)
         if key1 then SetBinding(key1, nil) end
         if key2 then SetBinding(key2, nil) end
@@ -552,7 +640,7 @@ for s = 1, 8 do
         if item then
             draggingSlot = this.slotIndex
             local displayIcon = zPie:GetIcon(item)
-            dragTex:SetTexture(displayIcon)
+            zPie:SetIconTexture(dragTex, item, 0.07)
             dragFrame:Show()
             this:SetAlpha(0.2)
         end
@@ -686,7 +774,7 @@ function zPieConfigFrame:Refresh()
     if listeningForBind then
         bindBtn.text:SetText("|cffff0000Press Key...|r")
     else
-        local bind = GetBindingKey("ZPIE_RING_" .. selectedRing)
+        local bind = zPie:GetRingBinding(selectedRing)
         bindBtn.text:SetText(bind and ("Key: " .. bind) or "Key: [None]")
     end
     
@@ -728,19 +816,35 @@ function zPieConfigFrame:Refresh()
         end
     end
 
-    -- Apply tab labels with truncation to match user inputs
-    for i = 1, 10 do
+    -- Show ten rings per page; newly created rings are selected immediately.
+    local ringCount = zPie:GetRingCount()
+    local maxPage = math.max(1, math.ceil(ringCount / 10))
+    if ringPage > maxPage then ringPage = maxPage end
+    ringPageText:SetText(ringPage .. "/" .. maxPage)
+    if ringPage > 1 then prevPageBtn:Enable() else prevPageBtn:Disable() end
+    if ringPage < maxPage then nextPageBtn:Enable() else nextPageBtn:Disable() end
+
+    local firstRing = ((ringPage - 1) * 10) + 1
+    for tabSlot = 1, 10 do
+        local i = firstRing + tabSlot - 1
+        local tab = ringTabs[tabSlot]
+        tab.ringIndex = i
+        if i <= ringCount then
         local rName = (zPieDB[i] and zPieDB[i].name) or ("Ring "..i)
         if rName == "" then rName = "Ring "..i end
         local shortName = string.len(rName) > 10 and string.sub(rName, 1, 9).."." or rName
-        ringTabs[i].text:SetText(shortName)
+        tab.text:SetText(shortName)
+        tab:Show()
 
         if i == selectedRing then 
-            ringTabs[i]:SetBackdropBorderColor(0.2, 0.6, 1.0, 1)
-            ringTabs[i].text:SetTextColor(1, 1, 1)
+            tab:SetBackdropBorderColor(0.2, 0.6, 1.0, 1)
+            tab.text:SetTextColor(1, 1, 1)
         else 
-            ringTabs[i]:SetBackdropBorderColor(0, 0, 0, 1)
-            ringTabs[i].text:SetTextColor(0.6, 0.6, 0.6)
+            tab:SetBackdropBorderColor(0, 0, 0, 1)
+            tab.text:SetTextColor(0.6, 0.6, 0.6)
+        end
+        else
+            tab:Hide()
         end
     end
     
@@ -772,7 +876,7 @@ function zPieConfigFrame:Refresh()
             btn:SetPoint("CENTER", centerBtn, "CENTER", bx, by)
             
             local displayIcon = zPie:GetIcon(items[origSlot])
-            btn.icon:SetTexture(displayIcon)
+            zPie:SetIconTexture(btn.icon, items[origSlot], 0.07)
             btn:SetAlpha(1.0)
             btn:Show()
         end
