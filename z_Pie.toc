@@ -1,10 +1,10 @@
 ## Interface: 11200
 ## Title: |cffc77dffz|rPie
 ## Notes: zSuite radial menu for Vanilla 1.12 with dynamic slots and quick-tap.
-## SavedVariables: zPieDB
+## SavedVariables: zPieDB, zPieProfilesDB
 ## Author: Zab
-## Date: September 12, 2026
-## Version: 1.2.0
+## Date: October 15, 2026
+## Version: 1.2.1
 ## X-Website: https://github.com/zabuu/z_Pie
 
 zPie.lua

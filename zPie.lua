@@ -103,6 +103,67 @@ function zPie:CreateRing(name, items)
     return index
 end
 
+-- zPieDB remains the active settings table for compatibility with existing code.
+-- The account store owns each character table; legacy data is copied before sanitizing.
+function zPie:CopyProfile(value)
+    if type(value) ~= "table" then return value end
+    local copy = {}
+    for key, entry in pairs(value) do copy[key] = self:CopyProfile(entry) end
+    return copy
+end
+
+function zPie:InitializeProfiles()
+    local name, realm = UnitName("player"), GetRealmName()
+    if not name or name == "Unknown" or not realm or realm == "" then return false end
+    local key = name .. " - " .. realm
+    if not zPieProfilesDB then
+        zPieProfilesDB = { version = 1, characters = {}, saved = {} }
+        if type(zPieDB) == "table" then
+            zPieProfilesDB.legacyBackup = self:CopyProfile(zPieDB)
+            zPieProfilesDB.characters[key] = self:CopyProfile(zPieDB)
+        end
+    end
+    zPieProfilesDB.characters = zPieProfilesDB.characters or {}
+    zPieProfilesDB.saved = zPieProfilesDB.saved or {}
+    self.characterProfileKey = key
+    if not zPieProfilesDB.characters[key] then zPieProfilesDB.characters[key] = {} end
+    zPieDB = zPieProfilesDB.characters[key]
+    return true
+end
+
+function zPie:SaveProfile(name, overwrite)
+    if not self.characterProfileKey or not name then return nil end
+    name = string.gsub(name, "^%s*(.-)%s*$", "%1")
+    if name == "" then return nil end
+    if zPieProfilesDB.saved[name] and not overwrite then return nil, "exists" end
+    zPieProfilesDB.saved[name] = self:CopyProfile(zPieDB)
+    return name
+end
+
+function zPie:LoadProfile(kind, key)
+    if not self.characterProfileKey or self.currentRing then return false end
+    local source
+    if kind == "saved" then source = zPieProfilesDB.saved[key]
+    elseif kind == "character" then source = zPieProfilesDB.characters[key]
+    elseif kind == "legacy" then source = zPieProfilesDB.legacyBackup end
+    if not source then return false end
+    local replacement = self:CopyProfile(source)
+    -- Automatic recovery snapshots must never overwrite an earlier backup.
+    local backupBase = "Before load - " .. self.characterProfileKey
+    local backupName, suffix = backupBase, 2
+    while zPieProfilesDB.saved[backupName] do
+        backupName = backupBase .. " (" .. suffix .. ")"
+        suffix = suffix + 1
+    end
+    self:SaveProfile(backupName)
+    zPieDB = replacement
+    zPieProfilesDB.characters[self.characterProfileKey] = zPieDB
+    self:SanitizeDB()
+    self:InitButtons()
+    self:RefreshDBIcons()
+    return true
+end
+
 function zPie:SanitizeDB()
     if not zPieDB then zPieDB = {} end
     if not zPieDB.arrowStyle then zPieDB.arrowStyle = "Interface\\Minimap\\MinimapArrow" end
@@ -237,6 +298,18 @@ function zPie:GetBufferSlot()
     return 120
 end
 
+local function IsPlayerBuffActive(iconTexture)
+    if not iconTexture or iconTexture == "" then return false end
+
+    for i = 1, 32 do
+        local buffIcon = UnitBuff("player", i)
+        if not buffIcon then break end
+        if buffIcon == iconTexture then return true end
+    end
+
+    return false
+end
+
 local function IsSkillActive(iconTexture)
     if not iconTexture or iconTexture == "" then return false end
     
@@ -255,13 +328,7 @@ local function IsSkillActive(iconTexture)
         end
     end
     
-    for i = 1, 32 do
-        local buffIcon = UnitBuff("player", i)
-        if not buffIcon then break end
-        if buffIcon == iconTexture then return true end
-    end
-    
-    return false
+    return IsPlayerBuffActive(iconTexture)
 end
 
 local function SetRotatedTexCoords(tex, angle)
@@ -801,22 +868,28 @@ end
 function zPie:TargetRaidMarker(markerIndex)
     if type(TargetUnit) ~= "function" then return false end
 
-    -- SuperWoW/Nampower exposes each marked unit directly as mark1-mark8.
-    local markUnit = "mark" .. markerIndex
-    if UnitExists(markUnit) then
-        TargetUnit(markUnit)
-        if UnitExists("target") then return true end
-    end
-
     if type(GetRaidTargetIndex) ~= "function" then return false end
 
     local function TryUnit(unit)
-        if UnitExists(unit) and GetRaidTargetIndex(unit) == markerIndex then
-            TargetUnit(unit)
+        -- Extended tokens can resolve differently across client extensions.
+        -- Never target an unverified token or accept an unrelated target.
+        if not UnitExists(unit) or GetRaidTargetIndex(unit) ~= markerIndex then
+            return false
+        end
+        local hadTarget = UnitExists("target")
+        TargetUnit(unit)
+        if UnitExists("target") and GetRaidTargetIndex("target") == markerIndex then
             return true
+        end
+        if hadTarget and type(TargetLastTarget) == "function" then
+            TargetLastTarget()
+        elseif not hadTarget and type(ClearTarget) == "function" then
+            ClearTarget()
         end
         return false
     end
+
+    if TryUnit("mark" .. markerIndex) then return true end
 
     if TryUnit("mouseover") or TryUnit("focus") or TryUnit("targettarget") or
        TryUnit("pettarget") then
@@ -894,17 +967,30 @@ function zPie:ApplyRaidMarker(itemData)
     if currentMarker == markerIndex then newMarker = 0 end
     SetRaidTarget("target", newMarker)
 
-    -- Permission can also be denied by server-side rules we cannot predict.
-    -- If the marker did not change, retain useful behavior by targeting it.
-    if type(GetRaidTargetIndex) == "function" then
-        local appliedMarker = GetRaidTargetIndex("target") or 0
-        if appliedMarker ~= newMarker then
-            if self:TargetRaidMarker(markerIndex) then return true end
-            self:ShowRaidMarkerTargetError()
-            return false
-        end
-    end
+    -- Marker updates can arrive asynchronously. Do not interpret the old
+    -- marker as a failure and switch away from the unit we just marked.
     return true
+end
+
+function zPie:IsProtectedClassToggleActive(spellName)
+    if not spellName or not self.spellCache then return false end
+
+    local _, classToken = UnitClass("player")
+    local lowerName = string.lower(spellName)
+    local shouldProtect = false
+
+    if classToken == "HUNTER" and string.find(lowerName, "^aspect of the ") then
+        shouldProtect = lowerName ~= "aspect of the cheetah" and
+            lowerName ~= "aspect of the pack"
+    elseif classToken == "PALADIN" and string.find(lowerName, " aura$") then
+        shouldProtect = true
+    end
+
+    if not shouldProtect then return false end
+
+    local spellIndex = self.spellCache[spellName]
+    local icon = spellIndex and GetSpellTexture(spellIndex, BOOKTYPE_SPELL or "spell")
+    return IsPlayerBuffActive(icon)
 end
 
 function zPie:ExecuteAction(itemData)
@@ -916,6 +1002,7 @@ function zPie:ExecuteAction(itemData)
         self:ExecuteMacro(itemData)
     else
         if self.spellCache[itemData.name] then
+            if self:IsProtectedClassToggleActive(itemData.name) then return true end
             CastSpellByName(itemData.name)
             return
         end
@@ -1300,10 +1387,11 @@ zPie.updateDriver:SetScript("OnUpdate", function()
     end
 end)
 
-zPie:RegisterEvent("VARIABLES_LOADED")
+zPie:RegisterEvent("PLAYER_LOGIN")
 zPie:RegisterEvent("SPELLS_CHANGED")
 zPie:SetScript("OnEvent", function()
-    if event == "VARIABLES_LOADED" then
+    if event == "PLAYER_LOGIN" then
+        if not zPie:InitializeProfiles() then return end
         zPie:MigrateLegacyBindings()
         zPie:SanitizeDB()
         zPie:InitButtons()

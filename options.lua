@@ -26,7 +26,7 @@ title:SetText(zPie.TITLE)
 
 local footer = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 footer:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 10)
-footer:SetText(zPie.TITLE .. " v1.2.0 - Made by Zab - Sep 12, 2026")
+footer:SetText(zPie.TITLE .. " v1.2.1 - Made by Zab - Oct 15, 2026")
 
 local function CreateFlatButton(name, parent, width, height, text)
     local btn = CreateFrame("Button", name, parent)
@@ -51,7 +51,15 @@ end
 local closeBtn = CreateFlatButton("zPieCloseBtn", f, 24, 24, "X")
 closeBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -8)
 closeBtn.text:SetTextColor(1, 0.3, 0.3)
-closeBtn:SetScript("OnClick", function() f:Hide() end)
+closeBtn:SetScript("OnClick", function() zPieConfigFrame:Hide() end)
+
+-- Keep the existing editor together beneath the settings tabs.
+local window = f
+window:SetHeight(570)
+f = CreateFrame("Frame", nil, window)
+f:SetWidth(440)
+f:SetHeight(540)
+f:SetPoint("TOPLEFT", window, "TOPLEFT", 0, -30)
 
 local selectedRing = 1
 local ringPage = 1
@@ -763,6 +771,7 @@ function zPieConfigFrame:Refresh()
     if zPie and zPie.CacheSpells then zPie:CacheSpells() end
     if zPie and zPie.RefreshDBIcons then zPie:RefreshDBIcons() end
     
+    selectedRing = math.min(selectedRing, zPie:GetRingCount())
     local data = zPieDB[selectedRing]
     if not ebName.isFocused then ebName:SetText(data.name or ("Ring "..selectedRing)) end
     anchorBtn.text:SetText("Anchor: " .. (data.anchor or "MOUSE"))
@@ -892,4 +901,115 @@ end)
 f:SetScript("OnHide", function()
     listeningForBind = false
     keyInterceptor:Hide()
+end)
+
+-- Profiles are copies. Edits always belong to the logged-in character.
+local profiles = CreateFrame("Frame", nil, window)
+profiles:SetAllPoints(f)
+profiles:Hide()
+local ringsTab = CreateFlatButton(nil, window, 90, 22, "Settings")
+ringsTab:SetPoint("TOPLEFT", window, "TOPLEFT", 20, -34)
+local profilesTab = CreateFlatButton(nil, window, 90, 22, "Profiles")
+profilesTab:SetPoint("LEFT", ringsTab, "RIGHT", 6, 0)
+local profileHelp = profiles:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+profileHelp:SetPoint("TOPLEFT", profiles, "TOPLEFT", 20, -45)
+profileHelp:SetWidth(400)
+profileHelp:SetJustifyH("LEFT")
+profileHelp:SetText("Settings save automatically for this character.\nLoad a copy from another character or a saved profile.\nYour current setup is backed up before every load.")
+local profileStatus = profiles:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+profileStatus:SetPoint("TOPLEFT", profiles, "TOPLEFT", 20, -240)
+profileStatus:SetWidth(400)
+profileStatus:SetJustifyH("LEFT")
+local profileDropdown = CreateFrame("Frame", "zPieProfileDropdown", profiles, "UIDropDownMenuTemplate")
+profileDropdown:SetPoint("TOPLEFT", profiles, "TOPLEFT", 0, -105)
+UIDropDownMenu_SetWidth(290, profileDropdown)
+local chosenKind, chosenKey
+UIDropDownMenu_SetText("Choose a profile to load", profileDropdown)
+UIDropDownMenu_Initialize(profileDropdown, function()
+    if not zPieProfilesDB then return end
+    local entries = {}
+    for key in pairs(zPieProfilesDB.characters) do
+        table.insert(entries, { kind = "character", key = key, text = "Character: " .. key })
+    end
+    for key in pairs(zPieProfilesDB.saved) do
+        table.insert(entries, { kind = "saved", key = key, text = "Saved: " .. key })
+    end
+    if zPieProfilesDB.legacyBackup then
+        table.insert(entries, { kind = "legacy", text = "Original setup (migration backup)" })
+    end
+    table.sort(entries, function(a, b) return a.text < b.text end)
+    for _, entry in ipairs(entries) do
+        local kind, key, label = entry.kind, entry.key, entry.text
+        local info = {}
+        info.text = label
+        info.checked = chosenKind == kind and chosenKey == key
+        info.func = function()
+            chosenKind, chosenKey = kind, key
+            UIDropDownMenu_SetText(label, profileDropdown)
+        end
+        UIDropDownMenu_AddButton(info)
+    end
+end)
+local loadProfile = CreateFlatButton(nil, profiles, 80, 22, "Load")
+loadProfile:SetPoint("TOPLEFT", profiles, "TOPLEFT", 335, -110)
+loadProfile:SetScript("OnClick", function()
+    if zPie:LoadProfile(chosenKind, chosenKey) then
+        selectedRing, ringPage = 1, 1
+        zPieConfigFrame:Refresh()
+        profileStatus:SetText("Loaded a copy. Your previous setup is in the dropdown.")
+    else
+        profileStatus:SetText("Choose a profile first and close any open ring.")
+    end
+end)
+local profileName, profileNameLabel = CreateEditBox("zPieProfileName", profiles, 290, "Save a named copy:")
+profileNameLabel:SetPoint("TOPLEFT", profiles, "TOPLEFT", 20, -170)
+profileName:SetPoint("TOPLEFT", profiles, "TOPLEFT", 20, -190)
+local saveProfile = CreateFlatButton(nil, profiles, 80, 22, "Save")
+saveProfile:SetPoint("LEFT", profileName, "RIGHT", 25, 0)
+local pendingProfileName
+StaticPopupDialogs["ZPIE_OVERWRITE_PROFILE"] = {
+    text = 'Overwrite saved profile "%s"?',
+    button1 = "Overwrite",
+    button2 = "Cancel",
+    OnAccept = function()
+        if pendingProfileName then
+            local name = zPie:SaveProfile(pendingProfileName, true)
+            profileStatus:SetText(name and ("Saved: " .. name) or "Unable to save profile.")
+        end
+        pendingProfileName = nil
+    end,
+    OnCancel = function() pendingProfileName = nil end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+}
+saveProfile:SetScript("OnClick", function()
+    StaticPopup_Hide("ZPIE_OVERWRITE_PROFILE")
+    pendingProfileName = nil
+    local requestedName = string.gsub(profileName:GetText(), "^%s*(.-)%s*$", "%1")
+    local name, reason = zPie:SaveProfile(requestedName)
+    profileName:ClearFocus()
+    if reason == "exists" then
+        pendingProfileName = requestedName
+        StaticPopup_Show("ZPIE_OVERWRITE_PROFILE", requestedName)
+    else
+        profileStatus:SetText(name and ("Saved: " .. name) or "Enter a name for your profile.")
+    end
+end)
+
+ringsTab:SetScript("OnClick", function() profiles:Hide(); f:Show() end)
+profilesTab:SetScript("OnClick", function()
+    listeningForBind = false
+    keyInterceptor:Hide()
+    ebName:ClearFocus()
+    f:Hide()
+    profiles:Show()
+    profileStatus:SetText("Current character: " .. (zPie.characterProfileKey or ""))
+end)
+window:SetScript("OnHide", function()
+    StaticPopup_Hide("ZPIE_OVERWRITE_PROFILE")
+    pendingProfileName = nil
+    listeningForBind = false
+    keyInterceptor:Hide()
+    profileName:ClearFocus()
 end)
