@@ -26,6 +26,15 @@ zPie.activeSlots = {}
 zPie.spellCache = {}
 zPie.pendingItem = nil
 zPie.updateDriver = CreateFrame("Frame", "zPieUpdateDriver", UIParent)
+zPie.updateDriver:Hide()
+
+function zPie:RefreshUpdateDriver()
+    if self.currentRing or self.pendingItem then
+        self.updateDriver:Show()
+    else
+        self.updateDriver:Hide()
+    end
+end
 
 BINDING_HEADER_ZSUITE = "zSuite"
 for i = 1, 10 do
@@ -372,14 +381,10 @@ function zPie:InitButtons(firstRing, lastRing)
 
     self.compassFrame = CreateFrame("Frame", "zPieCompassFrame", UIParent)
     self.compassFrame:SetFrameStrata("FULLSCREEN_DIALOG")
-    self.compassFrame.arrows = {}
-    for i = 1, 360 do
-        local tex = self.compassFrame:CreateTexture(nil, "BACKGROUND")
-        tex:SetWidth(32)
-        tex:SetHeight(32)
-        tex:Hide()
-        self.compassFrame.arrows[i] = tex
-    end
+    self.compassFrame.arrow = self.compassFrame:CreateTexture(nil, "BACKGROUND")
+    self.compassFrame.arrow:SetWidth(32)
+    self.compassFrame.arrow:SetHeight(32)
+    self.compassFrame.arrow:Hide()
     end
 
     firstRing = firstRing or 1
@@ -495,13 +500,12 @@ function zPie:HideAll()
     if self.selectionTooltip then self.selectionTooltip:Hide() end
     
     if self.compassFrame then
-        if self.activeDegree and self.compassFrame.arrows[self.activeDegree] then
-            self.compassFrame.arrows[self.activeDegree]:Hide()
-        end
+        self.compassFrame.arrow:Hide()
         self.compassFrame:Hide()
     end
     self.activeDegree = nil
     self:Hide()
+    self:RefreshUpdateDriver()
 end
 
 function zPie:ShowSelectionTooltip(btn, itemData)
@@ -858,6 +862,7 @@ function zPie:UseItem(itemData, location, first, second)
     -- UseContainerItem can otherwise split one potion from its stack.
     if IsShiftKeyDown() then
         self.pendingItem = itemData
+        self:RefreshUpdateDriver()
         return true
     end
 
@@ -1084,6 +1089,7 @@ function zPie:OpenRing(ringIndex)
 
     self:HideAll()
     self.currentRing = ringIndex
+    self:RefreshUpdateDriver()
 
     local ringData = zPieDB[ringIndex]
     local scale = UIParent:GetEffectiveScale()
@@ -1107,20 +1113,9 @@ function zPie:OpenRing(ringIndex)
     else
         if arrowBehavior == "SMOOTH" then
             self.compassFrame:Show()
-            local compassRadius = radius - 35
-            for deg = 1, 360 do
-                local tex = self.compassFrame.arrows[deg]
-                tex:SetTexture(arrowTex)
-                local rads = math.rad(deg)
-                local ax = self.centerX + (compassRadius * math.cos(rads)) - 16
-                local ay = self.centerY + (compassRadius * math.sin(rads)) - 16
-                tex:ClearAllPoints()
-                tex:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", ax, ay)
-                
-                local rotation = rads - (math.pi / 2) + arrowOffset
-                SetRotatedTexCoords(tex, rotation)
-                tex:Hide()
-            end
+            self.compassFrame.arrow:SetTexture(arrowTex)
+            self.compassRadius = radius - 35
+            self.compassArrowOffset = arrowOffset
         else
             self.compassFrame:Hide()
         end
@@ -1301,7 +1296,10 @@ zPie.updateDriver:SetScript("OnUpdate", function()
         zPie:ExecuteAction(itemData)
     end
 
-    if not zPie.currentRing then return end
+    if not zPie.currentRing then
+        zPie:RefreshUpdateDriver()
+        return
+    end
 
     if (zPie.reqAlt and not IsAltKeyDown()) or
        (zPie.reqCtrl and not IsControlKeyDown()) or
@@ -1334,31 +1332,32 @@ zPie.updateDriver:SetScript("OnUpdate", function()
             zPie.hoveredSlice = nil
         end
         zPie.selectionTooltip:Hide()
-        if zPie.activeDegree and zPie.compassFrame.arrows[zPie.activeDegree] then
-            zPie.compassFrame.arrows[zPie.activeDegree]:Hide()
+        if zPie.activeDegree then
+            zPie.compassFrame.arrow:Hide()
             zPie.activeDegree = nil
         end
         return
     end
 
+    local rawAngle = math.atan2(dy, dx)
     if arrowTex ~= "NONE" and arrowBehavior == "SMOOTH" then
-        local rawAngle = math.atan2(dy, dx)
         local curDeg = math.floor(math.deg(rawAngle) + 0.5)
         if curDeg <= 0 then curDeg = curDeg + 360 end
         if curDeg == 0 then curDeg = 360 end
 
         if zPie.activeDegree ~= curDeg then
-            if zPie.activeDegree and zPie.compassFrame.arrows[zPie.activeDegree] then
-                zPie.compassFrame.arrows[zPie.activeDegree]:Hide()
-            end
             zPie.activeDegree = curDeg
-            if zPie.compassFrame.arrows[curDeg] then
-                zPie.compassFrame.arrows[curDeg]:Show()
-            end
+            local tex = zPie.compassFrame.arrow
+            local rads = math.rad(curDeg)
+            local ax = zPie.centerX + (zPie.compassRadius * math.cos(rads)) - 16
+            local ay = zPie.centerY + (zPie.compassRadius * math.sin(rads)) - 16
+            tex:ClearAllPoints()
+            tex:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", ax, ay)
+            SetRotatedTexCoords(tex, rads - (math.pi / 2) + zPie.compassArrowOffset)
+            tex:Show()
         end
     end
 
-    local rawAngle = math.atan2(dy, dx)
     local angle = (math.pi / 2) - rawAngle
     if angle < 0 then angle = angle + (2 * math.pi) end
 
